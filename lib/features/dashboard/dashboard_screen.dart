@@ -1,26 +1,31 @@
 import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../core/api/providers.dart';
+import '../../core/supabase/providers.dart';
 import '../../core/theme/colors.dart';
+import '../../models/day_macro_totals.dart';
+import '../../models/macro_goal.dart';
 import '../../shared/widgets/bento_metric_card.dart';
 import '../../shared/widgets/floating_nav_bar.dart';
 import '../../shared/widgets/hero_card.dart';
 import '../../shared/widgets/horizontal_day_selector.dart';
 
-/// First real assembly of the "Sophisticated Playful" visual language.
-/// Data below is static scaffolding, NOT wired to Supabase/the REST API yet
-/// (core/api and core/supabase clients come next in Fase 2) - this screen
-/// exists to validate the theme/component system end to end before wiring
-/// real repositories on top of it.
-class DashboardScreen extends StatefulWidget {
+/// Today's totals/entries are wired to real data: [todayMacroTotalsProvider]
+/// and [todayMealEntriesProvider] (Supabase direct) for what's been logged,
+/// [goalProvider] (Fase 1 REST) for the target. The week strip in
+/// [HorizontalDaySelector] is still static scaffolding - there's no
+/// per-day-of-week query yet, only "today" (see CLAUDE.md 2026-07-16 audit).
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  State<DashboardScreen> createState() => _DashboardScreenState();
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   int _selectedDay = 3;
   int _navIndex = 0;
 
@@ -28,7 +33,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     DaySelectorItem(label: 'L', value: '', status: ''),
     DaySelectorItem(label: 'M', value: '', status: ''),
     DaySelectorItem(label: 'M', value: '', status: ''),
-    DaySelectorItem(label: 'J', value: '1840', status: 'En meta'),
+    DaySelectorItem(label: 'J', value: '', status: 'Hoy'),
     DaySelectorItem(label: 'V', value: '', status: ''),
     DaySelectorItem(label: 'S', value: '', status: ''),
     DaySelectorItem(label: 'D', value: '', status: ''),
@@ -38,6 +43,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final semantics = theme.extension<NutriFlowSemanticColors>()!;
+    final goal = ref.watch(goalProvider);
+    final totals = ref.watch(todayMacroTotalsProvider);
+    final entries = ref.watch(todayMealEntriesProvider);
 
     return Scaffold(
       body: SafeArea(
@@ -68,100 +76,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     onSelect: (i) => setState(() => _selectedDay = i),
                   ),
                   const SizedBox(height: 20),
-                  HeroCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 64,
-                              height: 64,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: theme.cardColor,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: theme.colorScheme.outline.withValues(alpha: 0.4),
-                                ),
-                              ),
-                              child: const Text('🥗', style: TextStyle(fontSize: 28)),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Resumen de hoy', style: theme.textTheme.headlineMedium),
-                                  Text(
-                                    '1,840 / 2,200 kcal',
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: semantics.mutedForeground,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: BentoMetricCard(
-                                label: 'PROTEINA',
-                                value: '112 g',
-                                icon: LucideIcons.beef,
-                                accent: semantics.macroProtein,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: BentoMetricCard(
-                                label: 'CARBOS',
-                                value: '180 g',
-                                icon: LucideIcons.wheat,
-                                accent: semantics.macroCarbs,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        BentoMetricCard(
-                          label: 'GRASA',
-                          value: '58 g',
-                          icon: LucideIcons.droplet,
-                          accent: semantics.macroFat,
-                        ),
-                        const SizedBox(height: 16),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: semantics.muted,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(LucideIcons.sparkles, size: 16, color: semantics.mutedForeground),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'Te faltan 360 kcal para tu meta de hoy.',
-                                  style: theme.textTheme.bodyMedium,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  _TodaySummaryCard(goal: goal, totals: totals),
                   const SizedBox(height: 24),
                   Text('Comidas de hoy', style: theme.textTheme.headlineMedium),
                   const SizedBox(height: 12),
-                  _MealRow(icon: LucideIcons.coffee, title: 'Desayuno', subtitle: 'Avena con fruta'),
-                  const SizedBox(height: 10),
-                  _MealRow(icon: LucideIcons.utensils, title: 'Almuerzo', subtitle: 'Pollo con arroz'),
+                  ...entries.when(
+                    data: (rows) => rows.isEmpty
+                        ? [
+                            Text(
+                              'Todavia no registras comidas hoy.',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: semantics.mutedForeground,
+                              ),
+                            ),
+                          ]
+                        : [
+                            for (final (index, entry) in rows.indexed) ...[
+                              if (index > 0) const SizedBox(height: 10),
+                              _MealRow(
+                                icon: _iconForMealType(entry.mealType),
+                                title: _labelForMealType(entry.mealType),
+                                subtitle: '${entry.foodName} - ${entry.calories.round()} kcal',
+                              ),
+                            ],
+                          ],
+                    loading: () => [const Center(child: CircularProgressIndicator())],
+                    error: (error, _) => [
+                      Text(
+                        'No se pudieron cargar las comidas de hoy.',
+                        style: theme.textTheme.bodyMedium?.copyWith(color: semantics.mutedForeground),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -179,6 +125,146 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+IconData _iconForMealType(String mealType) {
+  return switch (mealType) {
+    'breakfast' => LucideIcons.coffee,
+    'lunch' => LucideIcons.utensils,
+    'dinner' => LucideIcons.utensilsCrossed,
+    _ => LucideIcons.cookie,
+  };
+}
+
+String _labelForMealType(String mealType) {
+  return switch (mealType) {
+    'breakfast' => 'Desayuno',
+    'lunch' => 'Almuerzo',
+    'dinner' => 'Cena',
+    _ => 'Snack',
+  };
+}
+
+class _TodaySummaryCard extends StatelessWidget {
+  const _TodaySummaryCard({required this.goal, required this.totals});
+
+  final AsyncValue<MacroGoal> goal;
+  final AsyncValue<DayMacroTotals> totals;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final semantics = theme.extension<NutriFlowSemanticColors>()!;
+
+    if (goal.isLoading || totals.isLoading) {
+      return const HeroCard(
+        child: SizedBox(height: 160, child: Center(child: CircularProgressIndicator())),
+      );
+    }
+    if (goal.hasError || totals.hasError) {
+      return HeroCard(
+        child: Text(
+          'No se pudo cargar tu resumen de hoy.',
+          style: theme.textTheme.bodyMedium?.copyWith(color: semantics.mutedForeground),
+        ),
+      );
+    }
+
+    final goalValue = goal.requireValue;
+    final totalsValue = totals.requireValue;
+    final remaining = goalValue.calorieTarget - totalsValue.calories.round();
+
+    return HeroCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: theme.colorScheme.outline.withValues(alpha: 0.4),
+                  ),
+                ),
+                child: const Text('🥗', style: TextStyle(fontSize: 28)),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Resumen de hoy', style: theme.textTheme.headlineMedium),
+                    Text(
+                      '${totalsValue.calories.round()} / ${goalValue.calorieTarget} kcal',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: semantics.mutedForeground,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: BentoMetricCard(
+                  label: 'PROTEINA',
+                  value: '${totalsValue.protein.round()} g',
+                  icon: LucideIcons.beef,
+                  accent: semantics.macroProtein,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: BentoMetricCard(
+                  label: 'CARBOS',
+                  value: '${totalsValue.carbs.round()} g',
+                  icon: LucideIcons.wheat,
+                  accent: semantics.macroCarbs,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          BentoMetricCard(
+            label: 'GRASA',
+            value: '${totalsValue.fat.round()} g',
+            icon: LucideIcons.droplet,
+            accent: semantics.macroFat,
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: semantics.muted,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                Icon(LucideIcons.sparkles, size: 16, color: semantics.mutedForeground),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    remaining > 0
+                        ? 'Te faltan $remaining kcal para tu meta de hoy.'
+                        : 'Superaste tu meta de hoy por ${-remaining} kcal.',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
