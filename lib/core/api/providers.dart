@@ -1,6 +1,7 @@
 import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/macro_goal.dart';
 import 'api_client.dart';
 import 'nutriflow_api.dart';
 
@@ -14,4 +15,11 @@ final clerkAuthProvider = Provider<ClerkAuthState>((ref) {
 final nutriFlowApiProvider = Provider<NutriFlowApi>((ref) {
   final clerkAuth = ref.watch(clerkAuthProvider);
   return NutriFlowApi(buildApiClient(clerkAuth));
+});
+
+/// GET /api/goals - server-side logic (falls back to a default when the
+/// user has none), so this goes through the REST client, not Supabase
+/// direct (CLAUDE.md section 6).
+final goalProvider = FutureProvider<MacroGoal>((ref) {
+  return ref.watch(nutriFlowApiProvider).getGoal();
 });
