@@ -14,6 +14,12 @@ Dio buildApiClient(ClerkAuthState clerkAuth) {
     BaseOptions(
       baseUrl: AppEnv.apiBaseUrl,
       contentType: 'application/json',
+      // Without these, a hung connection (dev server down, dropped
+      // packets) spins forever instead of surfacing an error - see
+      // CLAUDE.md 2026-07-17 bitacora. 30s covers the slowest call
+      // (nlp/parse's LLM round trip); everything else is much faster.
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 30),
     ),
   );
 

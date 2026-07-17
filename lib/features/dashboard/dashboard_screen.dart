@@ -1,6 +1,7 @@
 import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/api/providers.dart';
@@ -8,6 +9,7 @@ import '../../core/supabase/providers.dart';
 import '../../core/theme/colors.dart';
 import '../../models/day_macro_totals.dart';
 import '../../models/macro_goal.dart';
+import '../../shared/meal_type.dart';
 import '../../shared/widgets/bento_metric_card.dart';
 import '../../shared/widgets/floating_nav_bar.dart';
 import '../../shared/widgets/hero_card.dart';
@@ -94,8 +96,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             for (final (index, entry) in rows.indexed) ...[
                               if (index > 0) const SizedBox(height: 10),
                               _MealRow(
-                                icon: _iconForMealType(entry.mealType),
-                                title: _labelForMealType(entry.mealType),
+                                icon: iconForMealType(entry.mealType),
+                                title: labelForMealType(entry.mealType),
                                 subtitle: '${entry.foodName} - ${entry.calories.round()} kcal',
                               ),
                             ],
@@ -121,31 +123,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               currentIndex: _navIndex,
               onTap: (i) => setState(() => _navIndex = i),
               fabIcon: LucideIcons.plus,
-              onFabTap: () {},
+              onFabTap: () async {
+                await context.push('/log');
+                ref.invalidate(todayMealEntriesProvider);
+              },
             ),
           ],
         ),
       ),
     );
   }
-}
-
-IconData _iconForMealType(String mealType) {
-  return switch (mealType) {
-    'breakfast' => LucideIcons.coffee,
-    'lunch' => LucideIcons.utensils,
-    'dinner' => LucideIcons.utensilsCrossed,
-    _ => LucideIcons.cookie,
-  };
-}
-
-String _labelForMealType(String mealType) {
-  return switch (mealType) {
-    'breakfast' => 'Desayuno',
-    'lunch' => 'Almuerzo',
-    'dinner' => 'Cena',
-    _ => 'Snack',
-  };
 }
 
 class _TodaySummaryCard extends StatelessWidget {
