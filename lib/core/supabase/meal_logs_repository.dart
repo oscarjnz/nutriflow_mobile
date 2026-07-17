@@ -43,13 +43,20 @@ class MealLogsRepository {
         mealLogId: row['meal_log_id'] as String,
         foodName: food?['name_es'] as String? ?? 'Alimento',
         mealType: mealLog['meal_type'] as String,
-        quantityGrams: row['quantity_grams'] as num,
-        calories: row['calories_snapshot'] as num,
-        protein: row['protein_snapshot'] as num,
-        carbs: row['carbs_snapshot'] as num,
-        fat: row['fat_snapshot'] as num,
+        quantityGrams: _asNum(row['quantity_grams']),
+        calories: _asNum(row['calories_snapshot']),
+        protein: _asNum(row['protein_snapshot']),
+        carbs: _asNum(row['carbs_snapshot']),
+        fat: _asNum(row['fat_snapshot']),
         loggedAt: DateTime.parse(mealLog['logged_at'] as String),
       );
     }).toList();
   }
+
+  /// PostgREST serializes Postgres `numeric` columns as JSON strings (not
+  /// numbers) to avoid float precision loss - `quantity_grams` and the
+  /// `*_snapshot` columns are all `numeric(8,2)` (see
+  /// `nutriflow/supabase/migrations/20260613_0005_meal_tables.sql`), so this
+  /// must accept either a String or a num, not assume the JSON type.
+  num _asNum(Object? value) => value is String ? num.parse(value) : value as num;
 }

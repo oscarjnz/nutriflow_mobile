@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../models/macro_goal.dart';
+import '../../models/parse_food_result.dart';
 
 /// Result of a failed call: the REST layer never throws raw [DioException]
 /// out to callers, since every Fase 1 endpoint returns a JSON `{ error }`
@@ -33,12 +34,14 @@ class NutriFlowApi {
       _post('/api/meal-plan/log-planned', data: {'slot': slot});
 
   /// POST /api/nlp/parse - body `{ text: string }` (parseFoodInputSchema,
-  /// nutriflow/src/lib/validation/nlp.ts). Response `result` shape is the
-  /// deterministic parser's output, intentionally left as raw JSON here -
-  /// model it once the mobile NLP logging screen is built.
-  Future<Map<String, dynamic>> parseFoodText(String text) async {
+  /// nutriflow/src/lib/validation/nlp.ts). The LLM only extracts/normalizes
+  /// entities (name, quantity, unit) and ranks catalog candidates - it never
+  /// computes macros (CLAUDE.md §2/§6).
+  Future<ParseFoodResult> parseFoodText(String text) async {
     final response = await _post('/api/nlp/parse', data: {'text': text});
-    return (response.data as Map<String, dynamic>)['result'] as Map<String, dynamic>;
+    return ParseFoodResult.fromJson(
+      (response.data as Map<String, dynamic>)['result'] as Map<String, dynamic>,
+    );
   }
 
   /// POST /api/onboarding/complete - body is the full onboarding payload
@@ -68,6 +71,27 @@ class NutriFlowApi {
   /// proteinTarget, carbsTarget, fatTarget (all required ints).
   Future<void> setGoal(MacroGoal goal) => _post('/api/goals', data: goal.toJson());
 
+  /// POST /api/logging/log-meal - body matches `quickLogSchema`
+  /// (nutriflow/src/lib/validation/meal.ts): foodId, grams, mealType, and an
+  /// optional source (defaults server-side to 'manual'). The macro snapshot
+  /// is computed server-side (`prepareMealItem`/`computeMacros`) - this client
+  /// never does that math (CLAUDE.md §2).
+  Future<void> logMeal({
+    required String foodId,
+    required num grams,
+    required String mealType,
+    String? source,
+  }) =>
+      _post(
+        '/api/logging/log-meal',
+        data: {
+          'foodId': foodId,
+          'grams': grams,
+          'mealType': mealType,
+          if (source != null) 'source': source,
+        },
+      );
+
   Future<Response<dynamic>> _post(String path, {Object? data}) async {
     try {
       return await _dio.post(path, data: data);
@@ -87,6 +111,15 @@ class NutriFlowApi {
   ApiFailure _toFailure(DioException e) {
     final body = e.response?.data;
     final error = body is Map<String, dynamic> ? body['error'] as String? : null;
-    return ApiFailure(e.response?.statusCode, error ?? e.message ?? 'unknown_error');
+    if (error != null) return ApiFailure(e.response?.statusCode, error);
+
+    final connectivityError = switch (e.type) {
+      DioExceptionType.connectionTimeout ||
+      DioExceptionType.connectionError =>
+        'no se pudo conectar al servidor',
+      DioExceptionType.receiveTimeout || DioExceptionType.sendTimeout => 'el servidor tardo demasiado en responder',
+      _ => null,
+    };
+    return ApiFailure(e.response?.statusCode, connectivityError ?? e.message ?? 'unknown_error');
   }
 }
