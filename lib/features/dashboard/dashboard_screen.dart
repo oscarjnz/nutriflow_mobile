@@ -152,6 +152,7 @@ class _TodaySummaryCard extends StatelessWidget {
       );
     }
     if (goal.hasError || totals.hasError) {
+      debugPrint('Dashboard summary load failed: goal=${goal.error} totals=${totals.error}');
       return HeroCard(
         child: Text(
           'No se pudo cargar tu resumen de hoy.',
