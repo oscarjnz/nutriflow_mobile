@@ -23,3 +23,10 @@ final nutriFlowApiProvider = Provider<NutriFlowApi>((ref) {
 final goalProvider = FutureProvider<MacroGoal>((ref) {
   return ref.watch(nutriFlowApiProvider).getGoal();
 });
+
+/// GET /api/onboarding/status - drives the auth gate (`app/router.dart`).
+/// Autodispose + kept outside `goalProvider` since it's only read once per
+/// sign-in, not part of the dashboard's data.
+final onboardingStatusProvider = FutureProvider.autoDispose<bool>((ref) {
+  return ref.watch(nutriFlowApiProvider).getOnboardingStatus();
+});
