@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+import '../../models/food_search_result.dart';
 import '../../models/macro_goal.dart';
 import '../../models/parse_food_result.dart';
 
@@ -91,6 +92,17 @@ class NutriFlowApi {
           if (source != null) 'source': source,
         },
       );
+
+  /// POST /api/foods/barcode-lookup - body `{ barcode: string }` (8-14 digit
+  /// EAN/UPC/GTIN). Resolves an Open Food Facts product and imports it into
+  /// the catalog server-side if it wasn't there yet (`lookupBarcodeAction`),
+  /// so the returned food is always loggable via [logMeal] right away.
+  Future<FoodSearchResult> lookupBarcode(String barcode) async {
+    final response = await _post('/api/foods/barcode-lookup', data: {'barcode': barcode});
+    return FoodSearchResult.fromJson(
+      (response.data as Map<String, dynamic>)['food'] as Map<String, dynamic>,
+    );
+  }
 
   Future<Response<dynamic>> _post(String path, {Object? data}) async {
     try {
