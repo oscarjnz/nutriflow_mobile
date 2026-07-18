@@ -107,7 +107,16 @@ class _LoggingScreenState extends ConsumerState<LoggingScreen> {
     final canLog = _selections.values.any((s) => s.foodId != null);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Registrar comida')),
+      appBar: AppBar(
+        title: const Text('Registrar comida'),
+        actions: [
+          IconButton(
+            tooltip: 'Escanear codigo de barras',
+            icon: const Icon(LucideIcons.scanLine),
+            onPressed: () => context.push('/log/barcode'),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
