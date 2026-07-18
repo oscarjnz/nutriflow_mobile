@@ -27,7 +27,7 @@
 
 **Verificado 2026-07-17 (noche) en dispositivo Android fisico (Samsung Galaxy A55, `flutter run -d <serial>`):** login con Google via Clerk funciona correctamente en un dispositivo real (a diferencia de emulador con red rota o desktop sin webview, ver bitacora). Con `API_BASE_URL` apuntando a la IP LAN de la maquina de desarrollo + puerto 3002 correcto, el dashboard carga bien (goal + totales + lista de comidas). Oscar confirmo que "todo esta correcto" para pasar a la siguiente fase.
 
-**Siguiente accion concreta (decidir con Oscar):** (a) revisar y commitear el endpoint nuevo + los demas archivos pendientes en el repo `nutriflow`; (b) arrancar Fase 3 (onboarding completo, edicion de foods, fasting timer, weight logs, favorites/recipes) o Fase 3.5 (barcode/name capture, ver seccion 8) - a decidir cual primero; (c) endpoint REST de barcode-lookup (Fase 3.5) sigue pendiente.
+**Siguiente accion concreta (decidir con Oscar):** (a) revisar y commitear en `nutriflow` los 4 endpoints REST que ahi siguen sin commitear (`goals`, `logging/log-meal`, `foods/barcode-lookup`, `foods/selectable`, `onboarding/status`) + los demas archivos pendientes de sesiones previas; (b) **probar el wizard de onboarding de punta a punta con una cuenta nueva** (no se hizo esta sesion, solo se verifico que no rompe cuentas ya onboardeadas); (c) seguir con el resto de Fase 3 (edicion de foods, fasting timer, weight logs, favorites/recipes, offline-first).
 
 ---
 
@@ -188,7 +188,7 @@ nutriflowMobile/
 | 0 | Validar puente Clerk -> Supabase (RLS con JWT real) | **HECHO 2026-07-10** (ver bitacora) | repo `nutriflow` (dashboards Clerk + Supabase) |
 | 1 | Endpoints REST en `nutriflow/src/app/api/`: `meal-plan/regenerate`, `meal-plan/log-planned`, `nlp/parse`, `onboarding/complete`, `onboarding/food-selections`, `goals` | **HECHO** (verificado 2026-07-14, los 6 archivos existen) | repo `nutriflow` |
 | 2 | Setup del proyecto Flutter aqui: `supabase_flutter` + Clerk SDK, theme portado, pantallas MVP (login, dashboard, registro manual, ver plan) | **EN CURSO** - stack, theme, auth bridge, API client, auth gate, y `DashboardScreen` (datos reales de hoy) ya existen; falta registro manual de comidas y ver plan | este repo (`nutriflowMobile`) |
-| 3 | Paridad ampliada: onboarding completo, edicion de foods, fasting timer, weight logs, favorites/recipes, offline-first | Pendiente | este repo |
+| 3 | Paridad ampliada: onboarding completo, edicion de foods, fasting timer, weight logs, favorites/recipes, offline-first | **Onboarding completo HECHO** (2026-07-17 noche, ver detalle abajo); resto pendiente | este repo |
 | 3.5 | **Captura de comida por codigo de barras + busqueda por nombre** (pedido por Oscar 2026-07-17) | **HECHO** (2026-07-17 noche), ver detalle abajo | ambos repos |
 | 4 | Distribucion Android/iOS | Pendiente | este repo |
 
@@ -202,6 +202,25 @@ Busqueda por nombre ya estaba hecha (ver bitacora del mismo dia, mas temprano). 
 - **Mobile:** se agrego `mobile_scanner` a `pubspec.yaml` (decision ya aprobada por Oscar al pedir seguir con Fase 3.5), con permiso de camara en `AndroidManifest.xml` (`CAMERA` + features opcionales) e `Info.plist` (`NSCameraUsageDescription`) para iOS. Modelo nuevo `models/food_search_result.dart` (freezed) mirror de `FoodSearchResult` (`nutriflow/src/repositories/foods.repo.ts`). `NutriFlowApi.lookupBarcode(String barcode)` en `core/api/nutriflow_api.dart` llama al endpoint nuevo. Pantalla nueva `features/logging/barcode_scan_screen.dart`: camara en vivo (`MobileScanner`) -> detecta codigo -> llama `lookupBarcode` -> muestra el producto resuelto con control de gramos (igual patron que `LoggingScreen`) -> `logMeal(..., source: 'barcode')`. Ruta `/log/barcode` en `app/router.dart`, entrypoint como icono (`LucideIcons.scanLine`) en el AppBar de `LoggingScreen`.
 - **Verificado en el emulador Android** (sin datos reales por la camara virtual en negro, pero sin crashear): navegacion `/log` -> icono de escanear -> `/log/barcode` renderiza limpio, sin excepciones en logcat. `flutter analyze` da 0 errores (solo los 3 infos preexistentes de siempre). `flutter build apk --debug` compila limpio con el plugin nativo nuevo. **Falta probar la deteccion real de un codigo de barras en un dispositivo fisico** (la camara del emulador no tiene feed real) - Oscar puede hacerlo la proxima vez que conecte el telefono.
 - Tambien se elimino `test/widget_test.dart` (boilerplate del contador default que `flutter create --platforms=windows .` genero en la sesion anterior, no aplicaba a esta app y rompia `flutter analyze`).
+
+### Detalle Fase 3 - onboarding completo (HECHO 2026-07-17 noche, mismo dia que Fase 3.5)
+
+Seguido de Fase 3.5, se implemento el wizard de onboarding completo (~15 campos + paso de seleccion de alimentos con minimos por categoria). Investigado en la web (`onboarding-client.tsx`, `onboarding.ts` schema, `features/onboarding/actions.ts`, `options.ts`, `food-selection.ts`) antes de tocar Dart, siguiendo la regla de nunca reimplementar logica de servidor - el wizard mobile solo recolecta las mismas respuestas y las manda tal cual a `POST /api/onboarding/complete`, que ya hacia todo el calculo (`computeBodyPlan`, generacion de plan, minimos de categoria) desde Fase 1.
+
+- **2 endpoints nuevos en `nutriflow`** (mismo patron que los anteriores, `getUser()` + 401/422):
+  - `GET /api/onboarding/status` -> `{ completed: boolean }`, envuelve el helper ya existente `hasCompletedOnboarding` (`user-profile.repo.ts`). Mirror exacto del check `profile?.onboardingCompleted` que hace `onboarding/page.tsx` en la web para decidir si redirigir.
+  - `GET /api/foods/selectable` -> `{ foods: SelectableFood[] }` (id, nameEs, category), envuelve `listSelectableFoods()`. Los minimos por categoria (`CATEGORY_META` en `food-selection.ts`) NO se sirven desde el backend - son datos estaticos, se duplicaron tal cual en Dart (`features/onboarding/food_category.dart`), y el servidor sigue siendo quien re-valida de forma autoritativa en `completeOnboardingAction`.
+  - `tsc --noEmit`/`eslint` limpios en ambos. **NO COMMITEADOS todavia** (mismo estado que el resto de `src/app/api/*` en ese repo).
+- **Mobile:**
+  - `features/onboarding/onboarding_options.dart`: opciones (goal/method/sex/activity/diet/pace/suggestionStyle/fasting/measurementUnits), copiadas tal cual de `options.ts`.
+  - `features/onboarding/food_category.dart`: `CATEGORY_META` + `selectionMeetsMinimums()`, puerto directo de `food-selection.ts` (misma logica de gating client-side, servidor re-valida).
+  - `models/selectable_food.dart` (freezed), mirror de `SelectableFood`.
+  - `NutriFlowApi.getOnboardingStatus()` y `.getSelectableFoods()` nuevos; `completeOnboarding()` ya existia (Fase 1) y no cambio.
+  - `onboardingStatusProvider` (FutureProvider.autoDispose) en `core/api/providers.dart`.
+  - **Pantalla nueva `features/onboarding/onboarding_screen.dart`**: wizard de 5 pasos (perfil, meta, actividad/dieta, plan de comidas, alimentos disponibles) con barra de progreso, validacion de "Continuar" por paso (recordName no vacio, minimos de categoria en el ultimo paso), y submit final a `completeOnboarding`. Reutiliza el patron `_OptionCard`/`_NumberField` propio, iconos Lucide (no Material) por la regla de seccion 5.
+  - **`app/router.dart` reestructurado:** `_AuthGate` (signed-in) ahora entra a un `_OnboardingGate` nuevo (`ConsumerWidget`) que lee `onboardingStatusProvider` y muestra `OnboardingScreen` o `DashboardScreen` segun `completed`. Sigue siendo un widget-swap, no `GoRouter.redirect` (misma decision de siempre, ver comentario en el archivo). `OnboardingScreen` no tiene ruta propia - se llega solo via el gate, igual que `DashboardScreen`.
+- **Verificado en el emulador Android:** la cuenta ya onboardeada (Oscar, la misma de toda la sesion) paso derecho al dashboard sin bloquearse - confirma que `onboardingStatusProvider` + el endpoint nuevo funcionan end-to-end para el caso "ya completo". `flutter analyze` 0 errores, `flutter build apk --debug` compila limpio. **Falta probar el wizard completo en si** (una cuenta nueva, sin onboarding) - no se forzo por tiempo/alcance de la sesion; la cuenta de prueba creada durante el debugging de Windows (`una cuenta de prueba`) quedo en un estado incierto (el sign-up parecio colgarse por el bug de Clerk+webview documentado esa noche) y no se uso para este test.
+- Iconos: se reemplazaron 4 usos de `Icons.*` (Material) por sus equivalentes Lucide (`arrowLeft`, `circleCheck`, `circleMinus`, `circlePlus`) para cumplir la regla de seccion 5 de no mezclar sistemas de iconos.
 
 ---
 
