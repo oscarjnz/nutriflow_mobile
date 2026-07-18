@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../../models/food_search_result.dart';
 import '../../models/macro_goal.dart';
 import '../../models/parse_food_result.dart';
+import '../../models/selectable_food.dart';
 
 /// Result of a failed call: the REST layer never throws raw [DioException]
 /// out to callers, since every Fase 1 endpoint returns a JSON `{ error }`
@@ -55,6 +56,23 @@ class NutriFlowApi {
   /// onboarding wizard UI (which will assemble this) doesn't exist yet.
   Future<void> completeOnboarding(Map<String, dynamic> payload) =>
       _post('/api/onboarding/complete', data: payload);
+
+  /// GET /api/onboarding/status - whether the signed-in user already has a
+  /// completed onboarding profile. Drives the auth gate's choice between
+  /// [OnboardingScreen] and [DashboardScreen] (see `app/router.dart`).
+  Future<bool> getOnboardingStatus() async {
+    final response = await _get('/api/onboarding/status');
+    return (response.data as Map<String, dynamic>)['completed'] as bool;
+  }
+
+  /// GET /api/foods/selectable - the catalog of foods the onboarding
+  /// wizard's "available foods" step can offer, grouped client-side by
+  /// `SelectableFood.category` (see `features/onboarding/food_category.dart`).
+  Future<List<SelectableFood>> getSelectableFoods() async {
+    final response = await _get('/api/foods/selectable');
+    final foods = (response.data as Map<String, dynamic>)['foods'] as List<dynamic>;
+    return foods.map((f) => SelectableFood.fromJson(f as Map<String, dynamic>)).toList();
+  }
 
   /// POST /api/onboarding/food-selections - body is a BARE JSON array of
   /// catalog food UUIDs, not an object: `["<uuid>", ...]`.
