@@ -122,7 +122,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 LucideIcons.user,
               ],
               currentIndex: _navIndex,
-              onTap: (i) => setState(() => _navIndex = i),
+              onTap: (i) {
+                setState(() => _navIndex = i);
+                if (i == 2) {
+                  context.push('/weight');
+                }
+              },
               fabIcon: LucideIcons.plus,
               onFabTap: () async {
                 await context.push('/log');
