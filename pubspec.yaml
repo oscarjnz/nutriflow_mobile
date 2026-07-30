@@ -67,6 +67,11 @@ dependencies:
   # Barcode camera scanning (Fase 3.5, CLAUDE.md §8/§4). Actively maintained,
   # CameraX on Android / AVFoundation on iOS.
   mobile_scanner: ^7.3.0
+  drift: ^2.34.3
+  sqlite3_flutter_libs: ^0.6.0+eol
+  path_provider: ^2.1.6
+  path: ^1.9.1
+  uuid: ^4.6.0
 
 dev_dependencies:
   flutter_test:
@@ -83,6 +88,7 @@ dev_dependencies:
   freezed: ^3.0.0
   json_serializable: ^6.9.0
   riverpod_generator: ^4.0.4
+  drift_dev: ^2.34.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
