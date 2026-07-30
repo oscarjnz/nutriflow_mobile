@@ -83,7 +83,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   Text('Comidas de hoy', style: theme.textTheme.headlineMedium),
                   const SizedBox(height: 12),
                   ...entries.when(
-                    data: (rows) => rows.isEmpty
+                    data: (cached) => cached.value.isEmpty
                         ? [
                             Text(
                               'Todavia no registras comidas hoy.',
@@ -93,7 +93,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             ),
                           ]
                         : [
-                            for (final (index, entry) in rows.indexed) ...[
+                            for (final (index, entry) in cached.value.indexed) ...[
                               if (index > 0) const SizedBox(height: 10),
                               _MealRow(
                                 icon: iconForMealType(entry.mealType),
