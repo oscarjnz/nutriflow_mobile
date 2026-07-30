@@ -79,7 +79,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     onSelect: (i) => setState(() => _selectedDay = i),
                   ),
                   const SizedBox(height: 20),
-                  _TodaySummaryCard(goal: goal, totals: totals),
+                  _TodaySummaryCard(
+                    goal: goal,
+                    totals: totals,
+                    entriesFromCache: entries.asData?.value.fromCache ?? false,
+                  ),
                   const SizedBox(height: 24),
                   Text('Comidas de hoy', style: theme.textTheme.headlineMedium),
                   const SizedBox(height: 12),
@@ -142,10 +146,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 }
 
 class _TodaySummaryCard extends StatelessWidget {
-  const _TodaySummaryCard({required this.goal, required this.totals});
+  const _TodaySummaryCard({
+    required this.goal,
+    required this.totals,
+    required this.entriesFromCache,
+  });
 
   final AsyncValue<CachedValue<MacroGoal>> goal;
   final AsyncValue<DayMacroTotals> totals;
+
+  /// Whether [todayMealEntriesProvider] (which [totals] is derived from)
+  /// fell back to the local cache - tracked separately from [goal] since
+  /// each read can fail/fall back independently of the other.
+  final bool entriesFromCache;
 
   @override
   Widget build(BuildContext context) {
@@ -259,7 +272,7 @@ class _TodaySummaryCard extends StatelessWidget {
               ],
             ),
           ),
-          if (goalCached.fromCache) ...[
+          if (goalCached.fromCache || entriesFromCache) ...[
             const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

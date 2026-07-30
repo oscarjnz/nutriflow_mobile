@@ -33,6 +33,8 @@ class WeightLogsRepository {
       decode: (raw) => (raw as List).cast<Map<String, dynamic>>().map(_toWeightLog).toList(),
       onNetworkError: (error, stackTrace) =>
           debugPrint('fetchRecent (weight_logs) failed, falling back to cache: $error\n$stackTrace'),
+      onCacheWriteError: (error, stackTrace) =>
+          debugPrint('fetchRecent (weight_logs) could not update the cache: $error\n$stackTrace'),
     );
   }
 

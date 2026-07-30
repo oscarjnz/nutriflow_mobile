@@ -34,6 +34,8 @@ final goalProvider = FutureProvider<CachedValue<MacroGoal>>((ref) {
     decode: (raw) => MacroGoal.fromJson(raw as Map<String, dynamic>),
     onNetworkError: (error, stackTrace) =>
         debugPrint('getGoal failed, falling back to cache: $error\n$stackTrace'),
+    onCacheWriteError: (error, stackTrace) =>
+        debugPrint('getGoal could not update the cache: $error\n$stackTrace'),
   );
 });
 

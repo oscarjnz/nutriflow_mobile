@@ -3,10 +3,14 @@ import 'package:nutriflow_mobile/core/local_db/cached_fetch.dart';
 import 'package:nutriflow_mobile/core/local_db/local_cache.dart';
 
 class _FakeLocalCache implements LocalCache {
+  _FakeLocalCache({this.putCacheError});
+
   final Map<String, Object?> _store = {};
+  final Object? putCacheError;
 
   @override
   Future<void> putCache(String key, Object? jsonEncodable) async {
+    if (putCacheError != null) throw putCacheError!;
     _store[key] = jsonEncodable;
   }
 
@@ -74,6 +78,55 @@ void main() {
       );
 
       expect(seenError, isA<StateError>());
+    });
+
+    test('returns the fresh value when caching it fails, not stale data', () async {
+      final cache = _FakeLocalCache(putCacheError: Exception('disk full'));
+
+      final result = await cachedFetch<int>(
+        cache: cache,
+        key: 'k',
+        fetchRaw: () async => 99,
+        decode: (raw) => raw as int,
+      );
+
+      expect(result.value, 99);
+      expect(result.fromCache, isFalse);
+    });
+
+    test('calls onCacheWriteError, not onNetworkError, when only the cache write fails', () async {
+      final cache = _FakeLocalCache(putCacheError: Exception('disk full'));
+      Object? networkError;
+      Object? cacheWriteError;
+
+      final result = await cachedFetch<int>(
+        cache: cache,
+        key: 'k',
+        fetchRaw: () async => 7,
+        decode: (raw) => raw as int,
+        onNetworkError: (error, stackTrace) => networkError = error,
+        onCacheWriteError: (error, stackTrace) => cacheWriteError = error,
+      );
+
+      expect(result.value, 7);
+      expect(result.fromCache, isFalse);
+      expect(networkError, isNull);
+      expect(cacheWriteError, isNotNull);
+    });
+
+    test('rethrows the network error when the cached value no longer matches decode', () async {
+      final cache = _FakeLocalCache();
+      await cache.putCache('k', {'unexpected': 'shape'});
+
+      expect(
+        () => cachedFetch<int>(
+          cache: cache,
+          key: 'k',
+          fetchRaw: () async => throw Exception('network down'),
+          decode: (raw) => raw as int, // throws TypeError on a Map
+        ),
+        throwsException,
+      );
     });
   });
 }
