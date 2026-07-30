@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/api/providers.dart';
 import '../features/auth/login_screen.dart';
+import '../features/body_metrics/weight_log_screen.dart';
 import '../features/dashboard/dashboard_screen.dart';
 import '../features/logging/barcode_scan_screen.dart';
 import '../features/logging/logging_screen.dart';
@@ -20,6 +21,7 @@ final appRouter = GoRouter(
     GoRoute(path: '/', builder: (context, state) => const _AuthGate()),
     GoRoute(path: '/log', builder: (context, state) => const LoggingScreen()),
     GoRoute(path: '/log/barcode', builder: (context, state) => const BarcodeScanScreen()),
+    GoRoute(path: '/weight', builder: (context, state) => const WeightLogScreen()),
   ],
 );
 
