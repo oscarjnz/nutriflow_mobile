@@ -2,13 +2,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/day_macro_totals.dart';
 import '../../models/day_meal_entry.dart';
+import '../local_db/cached_fetch.dart';
+import '../local_db/providers.dart';
 import 'meal_logs_repository.dart';
 
 final mealLogsRepositoryProvider = Provider<MealLogsRepository>((ref) {
-  return const MealLogsRepository();
+  return MealLogsRepository(ref.watch(localCacheProvider));
 });
 
-final todayMealEntriesProvider = FutureProvider<List<DayMealEntry>>((ref) {
+final todayMealEntriesProvider = FutureProvider<CachedValue<List<DayMealEntry>>>((ref) {
   return ref.watch(mealLogsRepositoryProvider).fetchTodayEntries();
 });
 
@@ -18,7 +20,7 @@ final todayMealEntriesProvider = FutureProvider<List<DayMealEntry>>((ref) {
 /// redundant round trip.
 final todayMacroTotalsProvider = Provider<AsyncValue<DayMacroTotals>>((ref) {
   final entries = ref.watch(todayMealEntriesProvider);
-  return entries.whenData((rows) {
-    return rows.fold(DayMacroTotals.zero(), (totals, entry) => totals + entry);
+  return entries.whenData((cached) {
+    return cached.value.fold(DayMacroTotals.zero(), (totals, entry) => totals + entry);
   });
 });
