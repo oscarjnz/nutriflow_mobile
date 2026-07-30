@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/api/providers.dart';
+import '../../core/local_db/cached_fetch.dart';
 import '../../core/supabase/providers.dart';
 import '../../core/theme/colors.dart';
 import '../../models/day_macro_totals.dart';
@@ -138,7 +139,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 class _TodaySummaryCard extends StatelessWidget {
   const _TodaySummaryCard({required this.goal, required this.totals});
 
-  final AsyncValue<MacroGoal> goal;
+  final AsyncValue<CachedValue<MacroGoal>> goal;
   final AsyncValue<DayMacroTotals> totals;
 
   @override
@@ -161,7 +162,8 @@ class _TodaySummaryCard extends StatelessWidget {
       );
     }
 
-    final goalValue = goal.requireValue;
+    final goalCached = goal.requireValue;
+    final goalValue = goalCached.value;
     final totalsValue = totals.requireValue;
     final remaining = goalValue.calorieTarget - totalsValue.calories.round();
 
@@ -252,6 +254,28 @@ class _TodaySummaryCard extends StatelessWidget {
               ],
             ),
           ),
+          if (goalCached.fromCache) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: semantics.muted,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  Icon(LucideIcons.cloudOff, size: 16, color: semantics.mutedForeground),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Sin conexion: mostrando los ultimos datos guardados.',
+                      style: theme.textTheme.bodySmall?.copyWith(color: semantics.mutedForeground),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
