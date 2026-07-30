@@ -52,6 +52,8 @@ class MealLogsRepository {
       decode: (raw) => (raw as List).cast<Map<String, dynamic>>().map(_toEntry).toList(),
       onNetworkError: (error, stackTrace) =>
           debugPrint('fetchTodayEntries failed, falling back to cache: $error\n$stackTrace'),
+      onCacheWriteError: (error, stackTrace) =>
+          debugPrint('fetchTodayEntries could not update the cache: $error\n$stackTrace'),
     );
   }
 
