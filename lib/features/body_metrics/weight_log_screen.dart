@@ -76,7 +76,8 @@ class _WeightLogScreenState extends ConsumerState<WeightLogScreen> {
       _hipsController.clear();
       ref.invalidate(recentWeightLogsProvider);
     } catch (e) {
-      setState(() => _error = 'No pudimos guardar el registro ($e).');
+      debugPrint('logWeight failed: $e');
+      setState(() => _error = 'No pudimos guardar el registro. Intenta de nuevo.');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
