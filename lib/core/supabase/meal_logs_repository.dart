@@ -1,4 +1,5 @@
 import '../../models/day_meal_entry.dart';
+import 'postgrest_numeric.dart';
 import 'supabase_bootstrap.dart';
 
 /// Direct-Supabase reads for `meal_logs`/`meal_items` (CLAUDE.md section 6 -
@@ -43,20 +44,14 @@ class MealLogsRepository {
         mealLogId: row['meal_log_id'] as String,
         foodName: food?['name_es'] as String? ?? 'Alimento',
         mealType: mealLog['meal_type'] as String,
-        quantityGrams: _asNum(row['quantity_grams']),
-        calories: _asNum(row['calories_snapshot']),
-        protein: _asNum(row['protein_snapshot']),
-        carbs: _asNum(row['carbs_snapshot']),
-        fat: _asNum(row['fat_snapshot']),
+        quantityGrams: numFromPostgrest(row['quantity_grams']),
+        calories: numFromPostgrest(row['calories_snapshot']),
+        protein: numFromPostgrest(row['protein_snapshot']),
+        carbs: numFromPostgrest(row['carbs_snapshot']),
+        fat: numFromPostgrest(row['fat_snapshot']),
         loggedAt: DateTime.parse(mealLog['logged_at'] as String),
       );
     }).toList();
   }
 
-  /// PostgREST serializes Postgres `numeric` columns as JSON strings (not
-  /// numbers) to avoid float precision loss - `quantity_grams` and the
-  /// `*_snapshot` columns are all `numeric(8,2)` (see
-  /// `nutriflow/supabase/migrations/20260613_0005_meal_tables.sql`), so this
-  /// must accept either a String or a num, not assume the JSON type.
-  num _asNum(Object? value) => value is String ? num.parse(value) : value as num;
 }
