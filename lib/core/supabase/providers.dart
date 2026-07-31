@@ -2,9 +2,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/day_macro_totals.dart';
 import '../../models/day_meal_entry.dart';
+import '../../models/fasting_session.dart';
 import '../../models/weight_log.dart';
 import '../local_db/cached_fetch.dart';
 import '../local_db/providers.dart';
+import 'fasting_sessions_repository.dart';
 import 'meal_logs_repository.dart';
 import 'weight_logs_repository.dart';
 
@@ -33,4 +35,16 @@ final weightLogsRepositoryProvider = Provider<WeightLogsRepository>((ref) {
 
 final recentWeightLogsProvider = FutureProvider.autoDispose<CachedValue<List<WeightLog>>>((ref) {
   return ref.watch(weightLogsRepositoryProvider).fetchRecent();
+});
+
+final fastingSessionsRepositoryProvider = Provider<FastingSessionsRepository>((ref) {
+  return FastingSessionsRepository(ref.watch(localCacheProvider));
+});
+
+final activeFastingSessionProvider = FutureProvider.autoDispose<CachedValue<FastingSession?>>((ref) {
+  return ref.watch(fastingSessionsRepositoryProvider).fetchActive();
+});
+
+final recentFastingSessionsProvider = FutureProvider.autoDispose<CachedValue<List<FastingSession>>>((ref) {
+  return ref.watch(fastingSessionsRepositoryProvider).fetchHistory();
 });
