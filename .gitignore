@@ -41,6 +41,18 @@ migrate_working_dir/
 # Local dart-define config (real keys) - env.example.json is the checked-in template
 env.json
 
+# Release signing. The keystore and its passwords never enter the repository:
+# whoever holds them can publish an update as if they were the author.
+android/key.properties
+*.jks
+*.keystore
+
+# Personal and academic material (course deliverables, documents carrying the
+# author's or third parties' personal data). This repository is public and
+# nothing of the sort is ever versioned, not even once, because history is
+# forever. These files still live on disk, they are just not tracked.
+docs/entrega/
+
 # Symbolication related
 app.*.symbols
 

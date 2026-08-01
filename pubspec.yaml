@@ -1,5 +1,5 @@
 name: nutriflow_mobile
-description: "A new Flutter project."
+description: "Cliente movil de NutriFlow: registro de comidas, macros, peso y ayuno intermitente."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -16,7 +16,11 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+# SemVer + build number. El build number (lo que sigue al `+`) es el
+# versionCode de Android: solo sube, nunca se repite ni baja, porque Google
+# Play rechaza para siempre un versionCode ya usado. 1.0.0 se reserva para
+# cuando la app funcione de punta a punta para alguien que no sea el autor.
+version: 0.1.0+1
 
 environment:
   sdk: ^3.12.1
