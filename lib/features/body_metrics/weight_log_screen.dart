@@ -96,6 +96,13 @@ class _WeightLogScreenState extends ConsumerState<WeightLogScreen> {
           onPressed: () => context.pop(),
         ),
         title: const Text('Peso corporal'),
+        actions: [
+          IconButton(
+            tooltip: 'Ayuno',
+            icon: const Icon(LucideIcons.timer),
+            onPressed: () => context.push('/fasting'),
+          ),
+        ],
       ),
       body: SafeArea(
         child: ListView(

@@ -10,6 +10,7 @@ import '../features/auth/login_screen.dart';
 import '../features/body_metrics/weight_log_screen.dart';
 import '../features/calendar/calendar_screen.dart';
 import '../features/dashboard/dashboard_screen.dart';
+import '../features/fasting/fasting_screen.dart';
 import '../features/logging/barcode_scan_screen.dart';
 import '../features/logging/logging_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
@@ -28,6 +29,7 @@ final appRouter = GoRouter(
     GoRoute(path: '/weight', builder: (context, state) => const WeightLogScreen()),
     GoRoute(path: '/calendar', builder: (context, state) => const CalendarScreen()),
     GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
+    GoRoute(path: '/fasting', builder: (context, state) => const FastingScreen()),
   ],
 );
 
