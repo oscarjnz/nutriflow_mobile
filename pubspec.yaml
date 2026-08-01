@@ -43,6 +43,19 @@ dependencies:
   supabase_flutter: ^2.8.0
   clerk_flutter: ^0.0.13
 
+  # Pure-Dart core of the Clerk SDK. Already pulled in transitively by
+  # clerk_flutter, declared directly because we import ClerkError/ClerkErrorCode
+  # to report auth failures (core/auth/clerk_error_display.dart).
+  clerk_auth: ^0.0.17-beta
+
+  # Windows platform implementation of webview_flutter (WebView2-backed).
+  # clerk_flutter's Google/SSO flow uses webview_flutter's WebViewController
+  # directly; without this, WebViewPlatform.instance is never set on Windows
+  # desktop and the SSO overlay crashes with a failed assertion. Registers
+  # itself via the standard federated-plugin mechanism (implements:
+  # webview_flutter), so no code changes are needed elsewhere.
+  webview_win_floating: ^3.0.3
+
   # Typed HTTP client for the Fase 1 REST endpoints in nutriflow/src/app/api
   dio: ^5.7.0
 

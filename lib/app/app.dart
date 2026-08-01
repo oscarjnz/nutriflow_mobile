@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/auth/clerk_error_display.dart';
 import '../core/theme/app_theme.dart';
 import 'router.dart';
 
@@ -15,6 +16,11 @@ class NutriFlowApp extends StatelessWidget {
       darkTheme: NutriFlowTheme.dark(),
       themeMode: ThemeMode.system,
       routerConfig: appRouter,
+      // Below MaterialApp (so ScaffoldMessenger exists) and below the
+      // ClerkAuth widget from main() - the only place both are true. Without
+      // it Clerk errors are rethrown and silently swallowed; see
+      // core/auth/clerk_error_display.dart.
+      builder: (context, child) => ClerkErrorDisplay(child: child!),
     );
   }
 }
