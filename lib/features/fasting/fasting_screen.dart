@@ -21,11 +21,12 @@ import 'fasting_protocols.dart';
 /// Falls back to the raw id if the protocol is not found (e.g., from a future
 /// version, or data inconsistency).
 String _getProtocolLabel(String protocolId) {
-  try {
-    return fastingProtocols.firstWhere((p) => p.id == protocolId).label;
-  } catch (e) {
-    return protocolId;
+  for (final protocol in fastingProtocols) {
+    if (protocol.id == protocolId) {
+      return protocol.label;
+    }
   }
+  return protocolId;
 }
 
 class FastingScreen extends ConsumerStatefulWidget {
@@ -137,6 +138,7 @@ class _FastingScreenState extends ConsumerState<FastingScreen> {
     );
     if (confirmed != true) return;
 
+    if (!mounted) return;
     setState(() => _canceling = true);
     try {
       await ref.read(fastingSessionsRepositoryProvider).cancelFast(id);
