@@ -10,6 +10,7 @@ import '../../core/supabase/providers.dart';
 import '../../core/theme/colors.dart';
 import '../../models/day_macro_totals.dart';
 import '../../models/macro_goal.dart';
+import '../../shared/date_labels.dart';
 import '../../shared/meal_type.dart';
 import '../../shared/widgets/bento_metric_card.dart';
 import '../../shared/widgets/floating_nav_bar.dart';
@@ -29,26 +30,42 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
-  int _selectedDay = 3;
+  /// Midnight of the day being shown. Defaults to today and is what every
+  /// read on this screen is keyed by, so tapping the week strip actually
+  /// re-queries instead of only moving a highlight.
+  late DateTime _selectedDate = startOfDay(DateTime.now());
   int _navIndex = 0;
 
-  static const _days = [
-    DaySelectorItem(label: 'L', value: '', status: ''),
-    DaySelectorItem(label: 'M', value: '', status: ''),
-    DaySelectorItem(label: 'M', value: '', status: ''),
-    DaySelectorItem(label: 'J', value: '', status: 'Hoy'),
-    DaySelectorItem(label: 'V', value: '', status: ''),
-    DaySelectorItem(label: 'S', value: '', status: ''),
-    DaySelectorItem(label: 'D', value: '', status: ''),
-  ];
+  /// The seven days of [_selectedDate]'s week, Monday first, computed fresh
+  /// on every build. Nothing about the date is baked in at compile time: an
+  /// app left open past midnight, or launched on any other day, shows the
+  /// correct week (the old hardcoded strip always claimed today was Thursday).
+  List<DateTime> get _week {
+    final monday = startOfWeek(_selectedDate);
+    return [for (var i = 0; i < 7; i++) monday.add(Duration(days: i))];
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final semantics = theme.extension<NutriFlowSemanticColors>()!;
+    final today = startOfDay(DateTime.now());
+    final isToday = isSameDay(_selectedDate, today);
+    final week = _week;
+
     final goal = ref.watch(goalProvider);
-    final totals = ref.watch(todayMacroTotalsProvider);
-    final entries = ref.watch(todayMealEntriesProvider);
+    // Today keeps reading the long-lived providers so the cached-offline
+    // behaviour and the post-logging invalidation both keep working; other
+    // days go through the autoDispose family.
+    final totals = isToday
+        ? ref.watch(todayMacroTotalsProvider)
+        : ref.watch(macroTotalsForDayProvider(_selectedDate));
+    final entries = isToday
+        ? ref.watch(todayMealEntriesProvider)
+        : ref.watch(mealEntriesForDayProvider(_selectedDate));
+
+    final user = ClerkAuth.userOf(context);
+    final greetingName = user?.hasName == true ? user!.firstName ?? user.name : 'Bienvenido';
 
     return Scaffold(
       body: SafeArea(
@@ -61,37 +78,65 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('HOLA DE NUEVO', style: theme.textTheme.labelSmall),
-                          const SizedBox(height: 2),
-                          Text('Oscar', style: theme.textTheme.headlineLarge),
-                        ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('HOLA DE NUEVO', style: theme.textTheme.labelSmall),
+                            const SizedBox(height: 2),
+                            Text(
+                              greetingName,
+                              style: theme.textTheme.headlineLarge,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
                       ),
+                      const SizedBox(width: 12),
                       const ClerkUserButton(),
                     ],
                   ),
-                  const SizedBox(height: 20),
-                  HorizontalDaySelector(
-                    items: _days,
-                    selectedIndex: _selectedDay,
-                    onSelect: (i) => setState(() => _selectedDay = i),
+                  const SizedBox(height: 4),
+                  Text(
+                    fullDateLabel(today),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: semantics.mutedForeground,
+                    ),
                   ),
                   const SizedBox(height: 20),
-                  _TodaySummaryCard(
+                  HorizontalDaySelector(
+                    items: [
+                      for (final day in week)
+                        DaySelectorItem(
+                          label: weekdayInitial(day),
+                          value: '${day.day}',
+                          status: isSameDay(day, today) ? 'Hoy' : shortDateLabel(day),
+                        ),
+                    ],
+                    selectedIndex: week.indexWhere((d) => isSameDay(d, _selectedDate)),
+                    onSelect: (i) => setState(() => _selectedDate = week[i]),
+                  ),
+                  const SizedBox(height: 20),
+                  _DaySummaryCard(
                     goal: goal,
                     totals: totals,
+                    date: _selectedDate,
+                    isToday: isToday,
                     entriesFromCache: entries.asData?.value.fromCache ?? false,
                   ),
                   const SizedBox(height: 24),
-                  Text('Comidas de hoy', style: theme.textTheme.headlineMedium),
+                  Text(
+                    isToday ? 'Comidas de hoy' : 'Comidas del ${shortDateLabel(_selectedDate)}',
+                    style: theme.textTheme.headlineMedium,
+                  ),
                   const SizedBox(height: 12),
                   ...entries.when(
                     data: (cached) => cached.value.isEmpty
                         ? [
                             Text(
-                              'Todavia no registras comidas hoy.',
+                              isToday
+                                  ? 'Todavia no registras comidas hoy.'
+                                  : 'No registraste comidas ese dia.',
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 color: semantics.mutedForeground,
                               ),
@@ -126,16 +171,26 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 LucideIcons.user,
               ],
               currentIndex: _navIndex,
-              onTap: (i) {
+              onTap: (i) async {
                 setState(() => _navIndex = i);
-                if (i == 2) {
-                  context.push('/weight');
-                }
+                final route = switch (i) {
+                  1 => '/calendar',
+                  2 => '/weight',
+                  3 => '/profile',
+                  _ => null,
+                };
+                if (route == null) return;
+                await context.push(route);
+                // The tab is a jump-off point, not a persistent section: once
+                // the pushed screen pops we are back on the dashboard, so the
+                // highlight has to come back with it.
+                if (mounted) setState(() => _navIndex = 0);
               },
               fabIcon: LucideIcons.plus,
               onFabTap: () async {
                 await context.push('/log');
                 ref.invalidate(todayMealEntriesProvider);
+                ref.invalidate(mealEntriesForDayProvider(_selectedDate));
               },
             ),
           ],
@@ -145,15 +200,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 }
 
-class _TodaySummaryCard extends StatelessWidget {
-  const _TodaySummaryCard({
+class _DaySummaryCard extends StatelessWidget {
+  const _DaySummaryCard({
     required this.goal,
     required this.totals,
+    required this.date,
+    required this.isToday,
     required this.entriesFromCache,
   });
 
   final AsyncValue<CachedValue<MacroGoal>> goal;
   final AsyncValue<DayMacroTotals> totals;
+
+  /// The day these totals belong to. The goal is the user's standing target,
+  /// which is not stored per day, so past days are compared against today's
+  /// goal - stated in the UI copy rather than silently implied.
+  final DateTime date;
+  final bool isToday;
 
   /// Whether [todayMealEntriesProvider] (which [totals] is derived from)
   /// fell back to the local cache - tracked separately from [goal] since
@@ -174,7 +237,7 @@ class _TodaySummaryCard extends StatelessWidget {
       debugPrint('Dashboard summary load failed: goal=${goal.error} totals=${totals.error}');
       return HeroCard(
         child: Text(
-          'No se pudo cargar tu resumen de hoy.',
+          'No se pudo cargar tu resumen.',
           style: theme.textTheme.bodyMedium?.copyWith(color: semantics.mutedForeground),
         ),
       );
@@ -209,7 +272,10 @@ class _TodaySummaryCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Resumen de hoy', style: theme.textTheme.headlineMedium),
+                    Text(
+                      isToday ? 'Resumen de hoy' : 'Resumen del ${shortDateLabel(date)}',
+                      style: theme.textTheme.headlineMedium,
+                    ),
                     Text(
                       '${totalsValue.calories.round()} / ${goalValue.calorieTarget} kcal',
                       style: theme.textTheme.bodyMedium?.copyWith(
@@ -263,9 +329,12 @@ class _TodaySummaryCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    remaining > 0
-                        ? 'Te faltan $remaining kcal para tu meta de hoy.'
-                        : 'Superaste tu meta de hoy por ${-remaining} kcal.',
+                    switch ((isToday, remaining > 0)) {
+                      (true, true) => 'Te faltan $remaining kcal para tu meta de hoy.',
+                      (true, false) => 'Superaste tu meta de hoy por ${-remaining} kcal.',
+                      (false, true) => 'Ese dia quedaste $remaining kcal por debajo de tu meta actual.',
+                      (false, false) => 'Ese dia superaste tu meta actual por ${-remaining} kcal.',
+                    },
                     style: theme.textTheme.bodyMedium,
                   ),
                 ),
