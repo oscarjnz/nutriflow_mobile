@@ -37,7 +37,7 @@
 
 **Ultimo hito verificado (2026-08-01):** revision final del branch hecha (dos revisores en paralelo), **con un hallazgo critico real: todas las marcas de tiempo se escribian como hora local sin offset en columnas `timestamptz`**, lo que hacia que un ayuno recien iniciado marcara "4h 0m" y que las comidas de la noche cayeran en el dia equivocado. Corregido con el helper `pgTimestamp` + `.toLocal()` en las lecturas; ver la entrada de bitacora del 2026-08-01 (cierre). `flutter analyze` 0 errores, `flutter test` 43/43.
 
-**Decision de Oscar (2026-08-01): NO mergear a `master` ni publicar todavia.** Todo queda commiteado en `worktree-fasting-timer` y la rama se conserva tal cual. Oscar va a crear el repositorio en GitHub el mismo, y subirlo sera "la ultima ultima tarea"; hasta que el lo pida, no se hace push ni se crea remoto. **El repo ya esta auditado y listo para publicar:** `env.json` no esta rastreado (ignorado en `.gitignore:42`), no hay claves incrustadas en `lib/`/`android/`/`ios/`, no hay artefactos de build rastreados, y no hay secretos en los archivos versionados (el unico match de `GROQ_API_KEY` es una mencion del nombre de la variable en este archivo, no un valor). **Licencia decidida y escrita el 2026-08-01: MIT** (`LICENSE` en la raiz, copyright "Oscar O. Jiménez Peguero"). **Falta antes de publicar un APK de verdad:** desplegar el backend en HTTPS, quitar el `network_security_config.xml` de cleartext, y firmar con una keystore propia (los dos ultimos ya anotados en el TODO de `android/app/build.gradle.kts`). El `README.md` sigue siendo el boilerplate de `flutter create` y hay que reescribirlo antes de hacer publico el repo.
+**PUBLICADO el 2026-08-01: https://github.com/oscarjnz/nutriflow_mobile** (publico, licencia **MIT** a nombre de Oscar, rama `main`, tag `v0.1.0`, version `0.1.0+1`). **La rama de trabajo de este worktree se llama ahora `main` y sigue a `origin/main`; la rama local `master` quedo obsoleta tras la reescritura de historial y NO se debe mergear sobre `main`** (son historias sin relacion). El `README.md` ya no es el boilerplate de `flutter create`. **Falta antes de publicar un APK de verdad:** desplegar el backend en HTTPS, quitar el `network_security_config.xml` de cleartext, y firmar con una keystore propia (los dos ultimos ya anotados en el TODO de `android/app/build.gradle.kts`). La guia completa del proceso (llaves, versionado, keystore, APK, Play, Clerk a produccion) esta en `C:\Users\oscar\OneDrive\Escritorio\NutriFlow - Guia de publicacion.txt`.
 
 **APK release instalado y verificado en el Galaxy A55 (2026-08-01):** compilado desde esta rama con todos los arreglos de la revision, instalado con `adb install -r`, arranca sin `FATAL` ni excepciones en logcat y el telefono alcanza el backend (`nc` a `192.168.100.130:3002` da exit 0).
 
@@ -265,6 +265,23 @@ Seguido de Fase 3.5, se implemento el wizard de onboarding completo (~15 campos 
 ## 10. Bitacora viva
 
 > La mantengo yo (Claude), no Oscar. Entrada nueva (mas reciente arriba) cada vez que hay un cambio de alcance, una decision no trivial, un error de raiz, o una confirmacion de un enfoque no estandar. Esta seccion es la que leo primero para no repetir trabajo ni errores ya resueltos.
+
+### 2026-08-01 (cierre) - Repo publicado, y la limpieza de historial que hubo que hacer antes
+
+El repositorio ya esta publico: **https://github.com/oscarjnz/nutriflow_mobile**, rama `main`, tag `v0.1.0`, MIT. Se subio solo el codigo fuente; el APK espera al backend en HTTPS.
+
+**Lo que hubo que limpiar antes del push, y por que no bastaba `git rm`.** La auditoria previa (`env.json` nunca rastreado, ningun patron de llave en ningun blob del historial) salio limpia, pero encontro dos cosas que no eran secretos tecnicos sino datos personales:
+
+1. `docs/entrega/` (documentacion del curso: nombre completo, matricula, nombre del docente, 26 capturas), commiteada en `50839a9`.
+2. **El correo de autor de los 51 commits era `ojimenez6@est.unibe.edu.do`**, su correo universitario, visible en cada commit de un repositorio publico. Esto es facil de pasar por alto porque no esta en ningun archivo: vive en los metadatos del commit.
+
+Oscar fue tajante al preguntarle: "Nunca subas nada que tenga que ver con estas cosas jamás". Como dejar de rastrear un archivo no lo borra del historial, se reescribio la historia completa con `git filter-repo` (`--invert-paths --path docs/entrega`, `--replace-text` para las menciones academicas que quedaban en `CLAUDE.md`, y `--mailmap` para el correo, ahora `169315935+oscarjnz@users.noreply.github.com`).
+
+**Como se hizo sin arriesgar el trabajo, que es lo reutilizable:** bundle de respaldo de todos los refs primero (`git bundle create ... --all`), clon **desde ese bundle** a un directorio temporal (asi el respaldo queda validado de paso, no solo creado), reescritura sobre el clon, y recien despues las verificaciones: cero commits tocando la ruta purgada, cero blobs con las cadenas sensibles, un solo correo de autor, y `git ls-tree -r HEAD` identico entre el arbol reescrito y el local (los blob hashes son de contenido, asi que iguales significa byte a byte). Solo entonces se hizo push, y el repo local se apunto a `origin/main`. El repo original nunca se toco hasta tener la verificacion en mano.
+
+**Consecuencia permanente:** la rama local `master` (`c765923`) quedo colgando de una historia que ya no existe en remoto. No mergearla nunca sobre `main`.
+
+Tambien se agregaron al `.gitignore`, por adelantado, `android/key.properties`, `*.jks` y `*.keystore`, para que la keystore de release sea imposible de commitear por accidente cuando exista.
 
 ### 2026-08-01 - Licencia MIT elegida, y el plan de publicacion (GitHub Releases -> Google Play) con lo que implica pasar Clerk a produccion
 
