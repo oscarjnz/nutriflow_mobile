@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The nutriflow REST backend runs as a plain HTTP dev server on the developer
+  machine (see CLAUDE.md section 0), so the app must be allowed to reach it over
+  cleartext. Supabase and Clerk are always HTTPS and are unaffected by this.
+
+  Cleartext is enabled globally rather than per-domain on purpose: API_BASE_URL
+  points at the machine's LAN IP, and that IP changes between sessions. When the
+  backend is served over HTTPS, drop this file and the networkSecurityConfig
+  attribute in AndroidManifest.xml.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
