@@ -137,6 +137,7 @@ macro-fat:     hsl(18 70% 58%)
 - Cero em dash (`—`) en cualquier texto de UI o comentario. Guion normal `-` unicamente.
 - Texto de UI en espanol. Codigo, identificadores, comentarios en ingles.
 - Contraste AA en todo control interactivo.
+- **Emojis limitados en toda la app (decidido 2026-08-01, pedido explicito de Oscar):** el objetivo es que la app no se sienta "hecha con IA". Nada de emojis decorativos en copy de UI, textos vacios (empty states), mensajes de error, ni titulos. Aplica tambien a las notificaciones push (seccion 8, backlog de Notificaciones) sin excepcion. Iconos Lucide (ya definidos arriba) siguen siendo el vehiculo visual normal; un emoji puntual solo se justifica si aporta algo que un icono no puede (a confirmar caso por caso con Oscar, no por defecto).
 
 ---
 
@@ -193,6 +194,16 @@ nutriflowMobile/
 | 3 | Paridad ampliada: onboarding completo, edicion de foods, fasting timer, weight logs, favorites/recipes, offline-first | **Onboarding completo HECHO** (2026-07-17 noche); **weight logs + cache local de lectura HECHO** (2026-07-30, ver detalle abajo); falta edicion de foods, fasting timer, favorites/recipes | este repo |
 | 3.5 | **Captura de comida por codigo de barras + busqueda por nombre** (pedido por Oscar 2026-07-17) | **HECHO** (2026-07-17 noche), ver detalle abajo | ambos repos |
 | 4 | Distribucion Android/iOS | Pendiente | este repo |
+
+### Backlog (pedido por Oscar 2026-08-01, no priorizado todavia)
+
+- **Notificaciones.** Varios tipos distintos, no una sola generica:
+  1. Notificacion tipo "media en curso" durante el ayuno (persistente/actualizable, como el widget de reproduccion de Spotify), mostrando tiempo transcurrido en vivo mientras el timer de `fasting` esta activo.
+  2. Recordatorios a hora fija para registrar comidas ("Recuerda registrar tu desayuno/almuerzo/cena", horarios probablemente configurables por el usuario, a definir).
+  3. Aviso tardio en el dia si no se llego a la meta de calorias ("hoy no lo lograste"), una sola vez, no repetitivo.
+  4. Mensaje de felicitacion cuando si se cumple la meta del dia.
+  - Sin disenar todavia: mecanismo tecnico (local notifications vs push real via FCM/APNs, quien dispara el aviso de "meta no cumplida"/"felicidades" - necesita un job que corra a una hora fija, no algo que el cliente pueda calcular solo si la app esta cerrada), copy exacto de cada mensaje, y si son configurables/silenciables por el usuario. Sujeto a la regla de emojis limitados de la seccion 5.
+- **Dominio propio para Clerk en produccion + Supabase sin auto-pausa.** Ver bitacora 2026-08-01: investigacion de dominio gratuito hecha (recomendacion `nutriflow.qzz.io` via DigitalPlat FreeDomain), cron de keep-alive de Supabase ya creado (`.github/workflows/supabase-keepalive.yml`), Clerk produccion todavia sin domain real que apuntarle.
 
 **Nota de coordinacion entre repos:** la Fase 1 se hace desde una sesion de Claude Code con working directory en `nutriflow` (no aqui), porque toca codigo TypeScript del backend. Cuando ambas carpetas sean hermanas (`nutriflow` y `nutriflowMobile`), cada sesion opera en su propio directorio; hay que traer el contexto manualmente de un lado a otro (memoria + este archivo) porque las sesiones no se ven entre si automaticamente.
 
@@ -253,6 +264,24 @@ Seguido de Fase 3.5, se implemento el wizard de onboarding completo (~15 campos 
 ## 10. Bitacora viva
 
 > La mantengo yo (Claude), no Oscar. Entrada nueva (mas reciente arriba) cada vez que hay un cambio de alcance, una decision no trivial, un error de raiz, o una confirmacion de un enfoque no estandar. Esta seccion es la que leo primero para no repetir trabajo ni errores ya resueltos.
+
+### 2026-08-01 - Dominio gratuito para Clerk produccion + cron de keep-alive de Supabase
+
+Oscar pidio tres cosas en el mismo mensaje: (a) investigar un dominio gratuito para poner el proyecto de Clerk en produccion, a partir de un repo de GitHub que el menciono; (b) un cron job para que el proyecto de Supabase (plan gratuito) nunca se pause por inactividad; (c) agregar Notificaciones al backlog (ver seccion 8) y una regla de emojis limitados en toda la app (ver seccion 5).
+
+**Correccion importante sobre el repo que Oscar dio (`https://github.com/DigitalPlatDev/Domain-OSS.git`): ese NO es el repo que reparte dominios gratis.** Es una plataforma de gestion de DNS autohospedada (self-hosted), el propio README dice explicitamente "not a registrar, registry, billing platform...". El repo real de regalo de dominios de la misma organizacion es **`DigitalPlatDev/FreeDomain`** (dashboard en `dash.domain.digitalplat.org`, login con GitHub). Si en el futuro Oscar u otra sesion vuelve a mencionar "Domain-OSS" para pedir un dominio gratis, aclarar esta confusion antes de seguir.
+
+Sufijos gratuitos que reparte `FreeDomain` hoy: `.dpdns.org`, `.qzz.io`, `.qd.je` (cada uno ya trae un punto propio, asi que el resultado final con el nombre del proyecto siempre queda en 2 puntos, ej `nutriflow.qzz.io`) y `.us.kg`/`.xx.kg` (3 puntos, ej `nutriflow.us.kg`). No existe una opcion de 1 solo punto tipo `nutriflow.io` en este servicio - el minimo alcanzable son 2 puntos.
+
+**Recomendacion dada a Oscar: `nutriflow.qzz.io`.** Entre las 3 opciones de 2 puntos, `qzz.io` es la mas corta y la que mejor "luce" para un producto (`.io` es reconocible en tech/startups; `dpdns.org` delata que es un dominio regalado; `qd.je` usa el ccTLD de Jersey, menos confiable a primera vista). La decision final y el registro en si quedan en manos de Oscar (el dijo explicitamente que el va a crear el dominio y propagarlo) - esto es solo la recomendacion, no se registro nada todavia.
+
+**Nota para cuando el dominio ya este propagado (Clerk produccion, no hecho todavia):** Clerk va a pedir agregar varios registros DNS (CNAME para el frontend API, `accounts.*`, y los de envio de correo tipo `clkmail`/`clk._domainkey`) sobre el dominio elegido. El dashboard de FreeDomain delega el dominio a name servers que Oscar controle (ej. una zona gratis de Cloudflare) - verificar ahi que se puedan agregar esos ~5-6 registros CNAME/TXT antes de conectar el dominio en el dashboard de Clerk.
+
+**Cron de keep-alive de Supabase: creado `.github/workflows/supabase-keepalive.yml`.** GitHub Actions con `schedule: cron "0 8 */3 * *"` (cada 3 dias, bien dentro de la ventana de ~7 dias que usa Supabase para pausar proyectos gratuitos por inactividad) + `workflow_dispatch` para poder dispararlo a mano. Hace un `curl` con la anon key contra `GET /rest/v1/` (no toca ninguna tabla, no depende de RLS) solo para generar trafico real de API. La anon key esta embebida directo en el YAML (no como GitHub secret): no es un dato sensible, la misma key ya viaja dentro del APK/build de la app y la seguridad real la da RLS, no el secreto de esta key - meter una capa extra de "secret" de GitHub aqui no agrega proteccion real. **No se hizo commit ni push del workflow todavia** - crear un workflow de CI/CD y activarlo en el repo publico es una accion que afecta infraestructura compartida (consume minutos de Actions del repo, queda visible), asi que se dejo el archivo creado localmente a la espera de que Oscar confirme que lo commitea/pushea.
+
+**Decision de diseno nueva (seccion 5): emojis limitados en toda la app, notificaciones incluidas.** Pedido explicito de Oscar: no quiere que la app "se sienta hecha con IA". Nada de emojis decorativos por defecto en copy/UI/notificaciones - los iconos Lucide siguen siendo el vehiculo visual normal.
+
+**Notificaciones: agregadas al backlog (seccion 8), NO implementadas.** Cuatro tipos pedidos (timer de ayuno tipo notificacion persistente estilo Spotify, recordatorios de comida a hora fija, aviso de meta de calorias no cumplida al final del dia, mensaje de felicitacion si se cumple). Falta decidir mecanismo tecnico (local notifications vs push real, quien dispara los avisos que dependen de una hora fija del dia si la app esta cerrada) antes de poder planificar implementacion - no se investigo eso todavia, queda para cuando se priorice este item del backlog.
 
 ### 2026-07-30 - Weight logs + cache local de lectura: cierre de la Tarea 10 (verificacion final)
 
