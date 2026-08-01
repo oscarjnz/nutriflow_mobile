@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../models/day_meal_entry.dart';
+import '../../shared/date_labels.dart';
 import '../local_db/cached_fetch.dart';
 import '../local_db/local_cache.dart';
 import 'postgrest_numeric.dart';
@@ -17,20 +18,29 @@ class MealLogsRepository {
 
   final LocalCache _cache;
 
+  /// Today keeps its original key so the cache written by previous versions
+  /// stays readable after an upgrade; other days get a dated key.
   static const _cacheKey = 'today_meals';
 
-  /// Today's logged meal items (local device day), newest first. Mirrors
-  /// `getDayEntries` in `nutriflow/src/repositories/meal-logs.repo.ts`:
-  /// same join (meal_items -> meal_logs -> foods), same
-  /// `deleted_at is null` + `logged_at` day-range filters.
-  Future<CachedValue<List<DayMealEntry>>> fetchTodayEntries() {
-    final now = DateTime.now();
-    final dayStart = DateTime(now.year, now.month, now.day);
+  /// Today's logged meal items (local device day), newest first.
+  Future<CachedValue<List<DayMealEntry>>> fetchTodayEntries() =>
+      fetchEntriesForDay(DateTime.now());
+
+  /// Logged meal items for the local calendar day containing [day], newest
+  /// first. Mirrors `getDayEntries` in
+  /// `nutriflow/src/repositories/meal-logs.repo.ts`: same join
+  /// (meal_items -> meal_logs -> foods), same `deleted_at is null` +
+  /// `logged_at` day-range filters.
+  Future<CachedValue<List<DayMealEntry>>> fetchEntriesForDay(DateTime day) {
+    final dayStart = startOfDay(day);
     final dayEnd = dayStart.add(const Duration(days: 1));
+    final key = isSameDay(day, DateTime.now())
+        ? _cacheKey
+        : 'meals_${dayKey(dayStart)}';
 
     return cachedFetch<List<DayMealEntry>>(
       cache: _cache,
-      key: _cacheKey,
+      key: key,
       fetchRaw: () => supabase
           .from('meal_items')
           .select('''
@@ -50,10 +60,14 @@ class MealLogsRepository {
           .lt('meal_logs.logged_at', dayEnd.toIso8601String())
           .order('logged_at', referencedTable: 'meal_logs', ascending: false),
       decode: (raw) => (raw as List).cast<Map<String, dynamic>>().map(_toEntry).toList(),
-      onNetworkError: (error, stackTrace) =>
-          debugPrint('fetchTodayEntries failed, falling back to cache: $error\n$stackTrace'),
-      onCacheWriteError: (error, stackTrace) =>
-          debugPrint('fetchTodayEntries could not update the cache: $error\n$stackTrace'),
+      onNetworkError: (error, stackTrace) => debugPrint(
+        'fetchEntriesForDay(${dayKey(dayStart)}) failed, falling back to cache: '
+        '$error\n$stackTrace',
+      ),
+      onCacheWriteError: (error, stackTrace) => debugPrint(
+        'fetchEntriesForDay(${dayKey(dayStart)}) could not update the cache: '
+        '$error\n$stackTrace',
+      ),
     );
   }
 

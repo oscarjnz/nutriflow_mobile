@@ -4,6 +4,7 @@ import '../../models/day_macro_totals.dart';
 import '../../models/day_meal_entry.dart';
 import '../../models/fasting_session.dart';
 import '../../models/weight_log.dart';
+import '../../shared/date_labels.dart';
 import '../local_db/cached_fetch.dart';
 import '../local_db/providers.dart';
 import 'fasting_sessions_repository.dart';
@@ -16,6 +17,26 @@ final mealLogsRepositoryProvider = Provider<MealLogsRepository>((ref) {
 
 final todayMealEntriesProvider = FutureProvider<CachedValue<List<DayMealEntry>>>((ref) {
   return ref.watch(mealLogsRepositoryProvider).fetchTodayEntries();
+});
+
+/// Meals for an arbitrary day, keyed by that day's midnight so the family
+/// does not create a separate provider per millisecond. Callers should pass
+/// `startOfDay(...)`; normalizing here as well keeps a careless call from
+/// silently fragmenting the cache.
+final mealEntriesForDayProvider =
+    FutureProvider.autoDispose.family<CachedValue<List<DayMealEntry>>, DateTime>((ref, day) {
+  return ref.watch(mealLogsRepositoryProvider).fetchEntriesForDay(startOfDay(day));
+});
+
+/// Macro totals for an arbitrary day, summed from
+/// [mealEntriesForDayProvider] for the same reason
+/// [todayMacroTotalsProvider] sums its own rows: there is no totals view yet.
+final macroTotalsForDayProvider =
+    Provider.autoDispose.family<AsyncValue<DayMacroTotals>, DateTime>((ref, day) {
+  final entries = ref.watch(mealEntriesForDayProvider(day));
+  return entries.whenData((cached) {
+    return cached.value.fold(DayMacroTotals.zero(), (totals, entry) => totals + entry);
+  });
 });
 
 /// Derived from [todayMealEntriesProvider] rather than a second query -
