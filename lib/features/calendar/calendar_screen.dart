@@ -26,7 +26,13 @@ class CalendarScreen extends ConsumerStatefulWidget {
 }
 
 class _CalendarScreenState extends ConsumerState<CalendarScreen> {
-  late final DateTime _today = startOfDay(DateTime.now());
+  /// Recomputed on every read, never cached in a field: frozen at
+  /// construction, an app left open past midnight would keep `_visibleMonth`
+  /// on the old month, disable the forward chevron (`_today` still being in
+  /// that month) and mark every cell of the new day as future, leaving the
+  /// user unable to reach today at all until they leave and re-enter.
+  DateTime get _today => startOfDay(DateTime.now());
+
   late DateTime _selected = _today;
 
   /// First of the month currently on screen. Kept separate from [_selected]
@@ -95,6 +101,34 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               isSameDay(_selected, _today) ? 'Hoy' : fullDateLabel(_selected),
               style: theme.textTheme.headlineMedium,
             ),
+            // Without this the calendar is the one screen that presents stale
+            // cached numbers as current: `CacheEntries` has no TTL, so a day
+            // browsed once stays cached indefinitely. The dashboard, profile
+            // and fasting screens all surface the same banner.
+            if (entries.value?.fromCache ?? false) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: semantics.muted,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  children: [
+                    Icon(LucideIcons.cloudOff, size: 16, color: semantics.mutedForeground),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Sin conexion: mostrando los ultimos datos guardados.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: semantics.mutedForeground,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             totals.when(
               data: (value) => _DayTotalsRow(

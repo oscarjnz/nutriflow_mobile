@@ -39,39 +39,69 @@ const _monthNames = <String>[
   'diciembre',
 ];
 
+/// Every function here reads `.year`/`.month`/`.day`/`.weekday`, and on a UTC
+/// [DateTime] those are the UTC wall-clock fields, not the user's. Since
+/// `DateTime.parse` of a PostgREST timestamp returns a UTC value, passing a
+/// raw row value straight into any of these would silently date it by UTC's
+/// calendar - the same defect fixed in `pgTimestamp`/`.toLocal()`, which no
+/// compiler or test would catch. Normalizing on the way in makes that
+/// impossible rather than merely discouraged.
+DateTime _local(DateTime date) => date.isUtc ? date.toLocal() : date;
+
 /// `DateTime.weekday` is 1..7 starting at Monday, so it maps straight onto
 /// the Monday-first tables above once shifted to a 0-based index.
-String weekdayName(DateTime date) => _weekdayNames[date.weekday - 1];
+String weekdayName(DateTime date) => _weekdayNames[_local(date).weekday - 1];
 
-String weekdayInitial(DateTime date) => _weekdayInitials[date.weekday - 1];
+String weekdayInitial(DateTime date) => _weekdayInitials[_local(date).weekday - 1];
 
-String monthName(DateTime date) => _monthNames[date.month - 1];
+String monthName(DateTime date) => _monthNames[_local(date).month - 1];
 
 /// "jueves, 31 de julio de 2026" - the full date, for headers.
-String fullDateLabel(DateTime date) =>
-    '${weekdayName(date)}, ${date.day} de ${monthName(date)} de ${date.year}';
+String fullDateLabel(DateTime date) {
+  final d = _local(date);
+  return '${weekdayName(d)}, ${d.day} de ${monthName(d)} de ${d.year}';
+}
 
 /// "31 de julio" - the date without weekday or year, for tighter spots.
-String shortDateLabel(DateTime date) => '${date.day} de ${monthName(date)}';
+String shortDateLabel(DateTime date) {
+  final d = _local(date);
+  return '${d.day} de ${monthName(d)}';
+}
 
 /// "julio de 2026" - the calendar's month header.
-String monthYearLabel(DateTime date) => '${monthName(date)} de ${date.year}';
+String monthYearLabel(DateTime date) {
+  final d = _local(date);
+  return '${monthName(d)} de ${d.year}';
+}
 
 /// Midnight local time, which is what every day-range query keys off.
-DateTime startOfDay(DateTime date) => DateTime(date.year, date.month, date.day);
+DateTime startOfDay(DateTime date) {
+  final d = _local(date);
+  return DateTime(d.year, d.month, d.day);
+}
 
-/// The Monday of [date]'s week, at midnight.
-DateTime startOfWeek(DateTime date) =>
-    startOfDay(date).subtract(Duration(days: date.weekday - 1));
+/// The Monday of [date]'s week, at midnight. Built by calendar arithmetic
+/// rather than by subtracting a fixed-length `Duration`, which would drift by
+/// an hour across a DST transition (no DST in the DR, but the app should not
+/// be wrong elsewhere for free).
+DateTime startOfWeek(DateTime date) {
+  final d = _local(date);
+  return DateTime(d.year, d.month, d.day - (d.weekday - 1));
+}
 
 /// Whether both instants fall on the same local calendar day.
-bool isSameDay(DateTime a, DateTime b) =>
-    a.year == b.year && a.month == b.month && a.day == b.day;
+bool isSameDay(DateTime a, DateTime b) {
+  final x = _local(a);
+  final y = _local(b);
+  return x.year == y.year && x.month == y.month && x.day == y.day;
+}
 
 /// A stable `yyyy-mm-dd` key, used for per-day cache entries. Built by hand
 /// rather than from `toIso8601String()` so it always reflects the LOCAL day,
 /// never a UTC-shifted one.
-String dayKey(DateTime date) =>
-    '${date.year.toString().padLeft(4, '0')}-'
-    '${date.month.toString().padLeft(2, '0')}-'
-    '${date.day.toString().padLeft(2, '0')}';
+String dayKey(DateTime date) {
+  final d = _local(date);
+  return '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
+}

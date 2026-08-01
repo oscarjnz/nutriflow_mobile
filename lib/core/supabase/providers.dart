@@ -19,10 +19,14 @@ final todayMealEntriesProvider = FutureProvider<CachedValue<List<DayMealEntry>>>
   return ref.watch(mealLogsRepositoryProvider).fetchTodayEntries();
 });
 
-/// Meals for an arbitrary day, keyed by that day's midnight so the family
-/// does not create a separate provider per millisecond. Callers should pass
-/// `startOfDay(...)`; normalizing here as well keeps a careless call from
-/// silently fragmenting the cache.
+/// Meals for an arbitrary day.
+///
+/// **Callers must pass `startOfDay(...)`.** The `startOfDay` below normalizes
+/// what reaches the repository and the local cache, but it cannot normalize
+/// the family key: Riverpod keys on the `DateTime` argument itself, and
+/// `DateTime` equality is exact to the microsecond. Passing `DateTime.now()`
+/// therefore spawns a fresh provider instance and a redundant fetch on every
+/// build, even though every one of them resolves to the same day.
 final mealEntriesForDayProvider =
     FutureProvider.autoDispose.family<CachedValue<List<DayMealEntry>>, DateTime>((ref, day) {
   return ref.watch(mealLogsRepositoryProvider).fetchEntriesForDay(startOfDay(day));

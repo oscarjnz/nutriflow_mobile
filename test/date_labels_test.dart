@@ -2,6 +2,32 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nutriflow_mobile/shared/date_labels.dart';
 
 void main() {
+  group('UTC inputs are normalized to the local day', () {
+    // These are timezone-independent: they compare a UTC instant against the
+    // same instant expressed locally, so they hold on any machine while still
+    // failing if the normalization is removed (under any non-zero offset).
+    final lateEvening = DateTime(2026, 7, 31, 23, 30);
+
+    test('dayKey agrees whether given a UTC or a local DateTime', () {
+      expect(dayKey(lateEvening.toUtc()), dayKey(lateEvening));
+    });
+
+    test('isSameDay agrees whether given a UTC or a local DateTime', () {
+      expect(isSameDay(lateEvening.toUtc(), lateEvening), isTrue);
+    });
+
+    test('startOfDay agrees whether given a UTC or a local DateTime', () {
+      expect(startOfDay(lateEvening.toUtc()), startOfDay(lateEvening));
+    });
+
+    test('labels agree whether given a UTC or a local DateTime', () {
+      expect(fullDateLabel(lateEvening.toUtc()), fullDateLabel(lateEvening));
+      expect(shortDateLabel(lateEvening.toUtc()), shortDateLabel(lateEvening));
+      expect(monthYearLabel(lateEvening.toUtc()), monthYearLabel(lateEvening));
+      expect(weekdayName(lateEvening.toUtc()), weekdayName(lateEvening));
+    });
+  });
+
   group('startOfWeek', () {
     test('returns the same day when given a Monday', () {
       // 2026-07-27 is a Monday.

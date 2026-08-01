@@ -189,6 +189,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               fabIcon: LucideIcons.plus,
               onFabTap: () async {
                 await context.push('/log');
+                // Same guard as the tab handler above: `ref` on a disposed
+                // ConsumerState throws, and the dashboard can be disposed
+                // while /log is on top (invalidating onboardingStatusProvider
+                // swaps this whole subtree out).
+                if (!mounted) return;
                 ref.invalidate(todayMealEntriesProvider);
                 ref.invalidate(mealEntriesForDayProvider(_selectedDate));
               },
