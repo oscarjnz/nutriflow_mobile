@@ -27,7 +27,22 @@ int? parseCustomTargetHours(String text) {
   return value;
 }
 
+/// Resolves a stored protocol id to its display label, so ids like `custom`
+/// never reach the Spanish UI. Falls back to the raw id when the protocol is
+/// unknown (a row written by a future version, or inconsistent data), which is
+/// still more useful than hiding the row.
+String fastingProtocolLabel(String protocolId) {
+  for (final protocol in fastingProtocols) {
+    if (protocol.id == protocolId) return protocol.label;
+  }
+  return protocolId;
+}
+
 String formatFastingDuration(Duration duration) {
+  // Clamped at zero: `inMinutes.remainder(60)` keeps the sign, so a negative
+  // duration would render as "-2h -30m". Reachable from clock skew or a
+  // timezone change mid-fast, never something worth showing the user.
+  if (duration.isNegative) duration = Duration.zero;
   final hours = duration.inHours;
   final minutes = duration.inMinutes.remainder(60);
   return '${hours}h ${minutes}m';

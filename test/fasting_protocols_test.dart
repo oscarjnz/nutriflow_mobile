@@ -28,5 +28,29 @@ void main() {
     test('formats durations under an hour', () {
       expect(formatFastingDuration(const Duration(minutes: 45)), '0h 45m');
     });
+
+    test('clamps negative durations to zero', () {
+      // Reachable from clock skew or a timezone change mid-fast.
+      // `inMinutes.remainder(60)` keeps the sign, so without the guard this
+      // would render as "-2h -30m".
+      expect(formatFastingDuration(const Duration(hours: -2, minutes: -30)), '0h 0m');
+    });
+  });
+
+  group('fastingProtocolLabel', () {
+    test('resolves an id to its Spanish label', () {
+      expect(fastingProtocolLabel('custom'), 'Personalizado');
+      expect(fastingProtocolLabel('16:8'), '16:8');
+    });
+
+    test('falls back to the raw id when the protocol is unknown', () {
+      expect(fastingProtocolLabel('omad'), 'omad');
+    });
+
+    test('covers every protocol offered by the picker', () {
+      for (final protocol in fastingProtocols) {
+        expect(fastingProtocolLabel(protocol.id), protocol.label);
+      }
+    });
   });
 }

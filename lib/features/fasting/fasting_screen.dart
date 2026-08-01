@@ -9,6 +9,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/supabase/providers.dart';
 import '../../core/theme/colors.dart';
 import '../../models/fasting_session.dart';
+import '../../shared/date_labels.dart';
 import '../../shared/widgets/hero_card.dart';
 import 'fasting_protocols.dart';
 
@@ -16,18 +17,6 @@ import 'fasting_protocols.dart';
 /// [FastingSessionsRepository] - see
 /// docs/superpowers/specs/2026-07-31-fasting-timer-design.md.
 /// Streaks are explicitly out of scope for v1.
-
-/// Resolves a protocol id to its display label.
-/// Falls back to the raw id if the protocol is not found (e.g., from a future
-/// version, or data inconsistency).
-String _getProtocolLabel(String protocolId) {
-  for (final protocol in fastingProtocols) {
-    if (protocol.id == protocolId) {
-      return protocol.label;
-    }
-  }
-  return protocolId;
-}
 
 class FastingScreen extends ConsumerStatefulWidget {
   const FastingScreen({super.key});
@@ -107,7 +96,10 @@ class _FastingScreenState extends ConsumerState<FastingScreen> {
   }
 
   Future<void> _endFast(String id) async {
-    setState(() => _ending = true);
+    setState(() {
+      _ending = true;
+      _error = null;
+    });
     try {
       await ref.read(fastingSessionsRepositoryProvider).endFast(id);
       if (mounted) {
@@ -139,7 +131,10 @@ class _FastingScreenState extends ConsumerState<FastingScreen> {
     if (confirmed != true) return;
 
     if (!mounted) return;
-    setState(() => _canceling = true);
+    setState(() {
+      _canceling = true;
+      _error = null;
+    });
     try {
       await ref.read(fastingSessionsRepositoryProvider).cancelFast(id);
       if (mounted) {
@@ -163,10 +158,13 @@ class _FastingScreenState extends ConsumerState<FastingScreen> {
     final active = ref.watch(activeFastingSessionProvider);
     final history = ref.watch(recentFastingSessionsProvider);
 
-    _ensureTicker(active.asData?.value.value != null);
+    // `.value`, not `asData`: during a `ref.invalidate` refresh the state is
+    // AsyncLoading with the previous value retained, so `asData` is null even
+    // though `.when(data:)` still renders the active card. Keying the ticker
+    // off `asData` would cancel and recreate it on every refresh.
+    _ensureTicker(active.value?.value != null);
 
-    final fromCache =
-        (active.asData?.value.fromCache ?? false) || (history.asData?.value.fromCache ?? false);
+    final fromCache = (active.value?.fromCache ?? false) || (history.value?.fromCache ?? false);
 
     return Scaffold(
       appBar: AppBar(
@@ -195,6 +193,7 @@ class _FastingScreenState extends ConsumerState<FastingScreen> {
                       session: cached.value!,
                       ending: _ending,
                       canceling: _canceling,
+                      error: _error,
                       onEnd: () => _endFast(cached.value!.id),
                       onCancel: () => _cancelFast(cached.value!.id),
                     ),
@@ -331,6 +330,7 @@ class _ActiveFastCard extends StatelessWidget {
     required this.session,
     required this.ending,
     required this.canceling,
+    required this.error,
     required this.onEnd,
     required this.onCancel,
   });
@@ -338,6 +338,7 @@ class _ActiveFastCard extends StatelessWidget {
   final FastingSession session;
   final bool ending;
   final bool canceling;
+  final String? error;
   final VoidCallback onEnd;
   final VoidCallback onCancel;
 
@@ -348,7 +349,7 @@ class _ActiveFastCard extends StatelessWidget {
     final elapsed = DateTime.now().difference(session.startAt);
     final targetSeconds = Duration(hours: session.targetHours).inSeconds;
     final progress = (elapsed.inSeconds / targetSeconds).clamp(0.0, 1.0);
-    final protocolLabel = _getProtocolLabel(session.protocol);
+    final protocolLabel = fastingProtocolLabel(session.protocol);
 
     return HeroCard(
       child: Column(
@@ -356,7 +357,15 @@ class _ActiveFastCard extends StatelessWidget {
         children: [
           Text('Ayuno en curso - $protocolLabel', style: theme.textTheme.headlineMedium),
           const SizedBox(height: 8),
-          Text(formatFastingDuration(elapsed), style: theme.textTheme.displaySmall),
+          Text(
+            formatFastingDuration(elapsed),
+            // Tabular figures are mandatory here (CLAUDE.md section 5): this
+            // is the one number on screen that changes every second, so
+            // proportional digits would make it jitter continuously.
+            style: theme.textTheme.displaySmall?.copyWith(
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
           const SizedBox(height: 4),
           Text(
             'de ${session.targetHours}h',
@@ -368,6 +377,13 @@ class _ActiveFastCard extends StatelessWidget {
             child: LinearProgressIndicator(value: progress, minHeight: 8),
           ),
           const SizedBox(height: 20),
+          // Failures from "Terminar"/"Cancelar" have to be rendered here:
+          // while a fast is active this card replaces _StartFastCard, which
+          // is the only other place that shows the screen's error text.
+          if (error != null) ...[
+            Text(error!, style: TextStyle(color: theme.colorScheme.error)),
+            const SizedBox(height: 12),
+          ],
           Row(
             children: [
               Expanded(
@@ -406,12 +422,9 @@ class _FastingHistoryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final semantics = theme.extension<NutriFlowSemanticColors>()!;
-    final date = session.startAt;
-    final formatted =
-        '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
     // fetchHistory() only returns rows where end_at is not null.
     final duration = session.endAt!.difference(session.startAt);
-    final protocolLabel = _getProtocolLabel(session.protocol);
+    final protocolLabel = fastingProtocolLabel(session.protocol);
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -427,7 +440,10 @@ class _FastingHistoryRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(protocolLabel, style: theme.textTheme.titleMedium),
-              Text(formatted, style: theme.textTheme.bodySmall?.copyWith(color: semantics.mutedForeground)),
+              Text(
+                shortDateLabel(session.startAt),
+                style: theme.textTheme.bodySmall?.copyWith(color: semantics.mutedForeground),
+              ),
             ],
           ),
           Text(formatFastingDuration(duration), style: theme.textTheme.titleMedium),
