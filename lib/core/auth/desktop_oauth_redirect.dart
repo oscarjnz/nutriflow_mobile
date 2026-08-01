@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
@@ -41,13 +43,29 @@ import 'package:flutter/foundation.dart';
 /// This keeps WebView2 entirely off the critical path and reuses the browser
 /// session the user is already signed into.
 class DesktopOAuthRedirect {
-  DesktopOAuthRedirect._(this._server, this.redirectUri) {
+  DesktopOAuthRedirect._(this._server, this.redirectUri, this._callbackPath) {
     unawaited(_serve());
   }
 
-  /// Path we tell Clerk to redirect back to. Anything else hitting the server
-  /// is answered with a 404 rather than treated as an auth callback.
-  static const _callbackPath = '/clerk-callback';
+  /// Fixed prefix of the redirect path. The full path also carries a
+  /// per-launch random segment - see [_callbackPath].
+  static const _callbackPrefix = '/clerk-callback';
+
+  /// The exact path a request must hit to be treated as an auth callback.
+  ///
+  /// `$_callbackPrefix/<128 bits of CSPRNG>`, regenerated every launch. Without
+  /// the random segment the callback URL is fully predictable: the path is a
+  /// constant and the port space is only 16 bits, so any other local process
+  /// could sweep loopback in well under a second and POST its own
+  /// `rotating_token_nonce` to us. We would hand that to Clerk's
+  /// `parseDeepLink` and the user would be signed in to the *attacker's*
+  /// account - textbook OAuth login-CSRF, which is exactly what RFC 8252
+  /// section 8.9 asks for a `state`-equivalent to prevent.
+  ///
+  /// The secret lives in the path rather than a query parameter on purpose:
+  /// the path survives the round trip through Clerk untouched, whereas extra
+  /// query parameters are not guaranteed to be echoed back.
+  final String _callbackPath;
 
   final HttpServer _server;
 
@@ -77,9 +95,14 @@ class DesktopOAuthRedirect {
       // parameter but does not require the port to be pre-registered on a
       // development instance, so an ephemeral port is fine.
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-      final uri = Uri.parse('http://127.0.0.1:${server.port}$_callbackPath');
-      debugPrint('[oauth] loopback redirect listening on $uri');
-      return DesktopOAuthRedirect._(server, uri);
+      final secret = base64Url.encode(
+        List<int>.generate(16, (_) => Random.secure().nextInt(256)),
+      );
+      final path = '$_callbackPrefix/$secret';
+      final uri = Uri.parse('http://127.0.0.1:${server.port}$path');
+      // Port only: the path now carries a secret and must not be logged.
+      debugPrint('[oauth] loopback redirect listening on port ${server.port}');
+      return DesktopOAuthRedirect._(server, uri, path);
     } on SocketException catch (error) {
       // Not fatal: sign-in with email still works, and we must not stop the
       // app from starting. Logged rather than swallowed (CLAUDE.md section 9).
@@ -92,18 +115,26 @@ class DesktopOAuthRedirect {
     await for (final request in _server) {
       final uri = request.requestedUri;
       try {
-        if (uri.path != _callbackPath) {
+        // Both checks matter: the secret segment stops another local process
+        // from injecting a callback, and restricting to GET stops a form POST
+        // from a page the user happens to have open from reaching us.
+        if (uri.path != _callbackPath || request.method != 'GET') {
           request.response.statusCode = HttpStatus.notFound;
           await request.response.close();
           continue;
         }
 
-        // Path only, never the query: it carries Clerk's handshake token, and
-        // debugPrint still writes to the log in release builds.
-        debugPrint('[oauth] callback received on ${uri.path}');
+        // Neither the query nor the path: the query carries Clerk's handshake
+        // token and the path carries our callback secret, and debugPrint still
+        // writes to the log in release builds. Parameter names are enough to
+        // diagnose a malformed callback.
+        debugPrint('[oauth] callback received, params=${uri.queryParameters.keys.toList()}');
         request.response
           ..statusCode = HttpStatus.ok
           ..headers.contentType = ContentType.html
+          // The requested URL contains the handshake token, so the browser
+          // must not keep this page in history-restorable cache.
+          ..headers.set(HttpHeaders.cacheControlHeader, 'no-store')
           ..write(_successPage);
         await request.response.close();
 
@@ -116,6 +147,16 @@ class DesktopOAuthRedirect {
     }
   }
 
+  /// Deliberately not called on a completed sign-in: the listener has to
+  /// outlive a single attempt, because the user can sign out and back in, or
+  /// abandon the consent screen and retry, and `redirectionGenerator` is
+  /// wired once at startup with a fixed [redirectUri]. Tearing down per
+  /// attempt would mean re-plumbing that on every retry.
+  ///
+  /// The exposure that would normally argue for a short lifetime is closed by
+  /// the secret in [_callbackPath] instead. Kept for tests and for an explicit
+  /// shutdown path if the app ever grows one.
+  @visibleForTesting
   Future<void> dispose() async {
     await _links.close();
     await _server.close(force: true);

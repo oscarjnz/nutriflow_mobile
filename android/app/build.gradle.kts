@@ -29,6 +29,16 @@ android {
         release {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
+            //
+            // TODO (same change, do not ship without it): before any Play
+            // upload, also remove `android:networkSecurityConfig` from
+            // src/main/AndroidManifest.xml and delete
+            // src/main/res/xml/network_security_config.xml. That file allows
+            // cleartext HTTP globally so release APKs installed on a test
+            // phone can reach the dev backend over the LAN, which is exactly
+            // what must not reach real users. This TODO lives here because
+            // this line is the one that has to change to publish, so it is
+            // the one that actually gets read.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
