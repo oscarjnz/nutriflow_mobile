@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../../models/weight_log.dart';
 import '../local_db/cached_fetch.dart';
 import '../local_db/local_cache.dart';
+import 'pg_timestamp.dart';
 import 'postgrest_numeric.dart';
 import 'supabase_bootstrap.dart';
 
@@ -61,7 +62,7 @@ class WeightLogsRepository {
       if (waistCm != null) 'waist_cm': waistCm,
       if (neckCm != null) 'neck_cm': neckCm,
       if (hipsCm != null) 'hips_cm': hipsCm,
-      'logged_at': (loggedAt ?? DateTime.now()).toIso8601String(),
+      'logged_at': pgTimestamp(loggedAt ?? DateTime.now()),
     });
   }
 
@@ -73,7 +74,9 @@ class WeightLogsRepository {
       waistCm: row['waist_cm'] == null ? null : numFromPostgrest(row['waist_cm']).toDouble(),
       neckCm: row['neck_cm'] == null ? null : numFromPostgrest(row['neck_cm']).toDouble(),
       hipsCm: row['hips_cm'] == null ? null : numFromPostgrest(row['hips_cm']).toDouble(),
-      loggedAt: DateTime.parse(row['logged_at'] as String),
+      // Local, so the UI dates each entry by the user's calendar day and not
+      // by UTC's. See `pgTimestamp` for the write side of this.
+      loggedAt: DateTime.parse(row['logged_at'] as String).toLocal(),
     );
   }
 }

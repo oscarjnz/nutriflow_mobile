@@ -4,6 +4,7 @@ import '../../models/day_meal_entry.dart';
 import '../../shared/date_labels.dart';
 import '../local_db/cached_fetch.dart';
 import '../local_db/local_cache.dart';
+import 'pg_timestamp.dart';
 import 'postgrest_numeric.dart';
 import 'supabase_bootstrap.dart';
 
@@ -56,8 +57,8 @@ class MealLogsRepository {
           ''')
           .isFilter('deleted_at', null)
           .isFilter('meal_logs.deleted_at', null)
-          .gte('meal_logs.logged_at', dayStart.toIso8601String())
-          .lt('meal_logs.logged_at', dayEnd.toIso8601String())
+          .gte('meal_logs.logged_at', pgTimestamp(dayStart))
+          .lt('meal_logs.logged_at', pgTimestamp(dayEnd))
           .order('logged_at', referencedTable: 'meal_logs', ascending: false),
       decode: (raw) => (raw as List).cast<Map<String, dynamic>>().map(_toEntry).toList(),
       onNetworkError: (error, stackTrace) => debugPrint(
@@ -84,7 +85,9 @@ class MealLogsRepository {
       protein: numFromPostgrest(row['protein_snapshot']),
       carbs: numFromPostgrest(row['carbs_snapshot']),
       fat: numFromPostgrest(row['fat_snapshot']),
-      loggedAt: DateTime.parse(mealLog['logged_at'] as String),
+      // Local, so meal times render in the user's own day. See `pgTimestamp`
+      // for the write side of this.
+      loggedAt: DateTime.parse(mealLog['logged_at'] as String).toLocal(),
     );
   }
 }

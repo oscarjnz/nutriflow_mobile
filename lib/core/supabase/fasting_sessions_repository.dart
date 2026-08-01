@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../../models/fasting_session.dart';
 import '../local_db/cached_fetch.dart';
 import '../local_db/local_cache.dart';
+import 'pg_timestamp.dart';
 import 'supabase_bootstrap.dart';
 
 /// Direct-Supabase CRUD for `fasting_sessions` (CLAUDE.md section 6), same
@@ -90,7 +91,7 @@ class FastingSessionsRepository {
       await supabase.from('fasting_sessions').insert({
         'id': _uuid.v4(),
         'user_id': userId,
-        'start_at': DateTime.now().toIso8601String(),
+        'start_at': pgTimestamp(DateTime.now()),
         'target_hours': targetHours,
         'protocol': protocol,
         if (notes != null && notes.isNotEmpty) 'notes': notes,
@@ -105,14 +106,14 @@ class FastingSessionsRepository {
   Future<void> endFast(String id) {
     return supabase
         .from('fasting_sessions')
-        .update({'end_at': DateTime.now().toIso8601String()})
+        .update({'end_at': pgTimestamp(DateTime.now())})
         .eq('id', id);
   }
 
   Future<void> cancelFast(String id) {
     return supabase
         .from('fasting_sessions')
-        .update({'deleted_at': DateTime.now().toIso8601String()})
+        .update({'deleted_at': pgTimestamp(DateTime.now())})
         .eq('id', id);
   }
 }
@@ -132,8 +133,12 @@ String? curatedFastingError(Object error) {
 FastingSession fastingSessionFromRow(Map<String, dynamic> row) {
   return FastingSession(
     id: row['id'] as String,
-    startAt: DateTime.parse(row['start_at'] as String),
-    endAt: row['end_at'] == null ? null : DateTime.parse(row['end_at'] as String),
+    // `.toLocal()` is not cosmetic: PostgREST sends an offset-bearing string,
+    // so `DateTime.parse` yields a UTC value whose `.day`/`.hour` are UTC
+    // components. Rendering those directly would date a 21:00 fast in Santo
+    // Domingo (UTC-4) as the following day.
+    startAt: DateTime.parse(row['start_at'] as String).toLocal(),
+    endAt: row['end_at'] == null ? null : DateTime.parse(row['end_at'] as String).toLocal(),
     targetHours: row['target_hours'] as int,
     protocol: row['protocol'] as String,
     notes: row['notes'] as String?,
