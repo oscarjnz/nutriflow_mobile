@@ -3,6 +3,11 @@
 *.log
 *.pyc
 *.swp
+__pycache__/
+
+# Word lock files and autosave backups (docs/entrega is edited in Word)
+~$*.docx
+*.wbk
 .DS_Store
 .atom/
 .build/
