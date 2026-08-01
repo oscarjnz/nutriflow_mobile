@@ -16,6 +16,18 @@ import 'fasting_protocols.dart';
 /// [FastingSessionsRepository] - see
 /// docs/superpowers/specs/2026-07-31-fasting-timer-design.md.
 /// Streaks are explicitly out of scope for v1.
+
+/// Resolves a protocol id to its display label.
+/// Falls back to the raw id if the protocol is not found (e.g., from a future
+/// version, or data inconsistency).
+String _getProtocolLabel(String protocolId) {
+  try {
+    return fastingProtocols.firstWhere((p) => p.id == protocolId).label;
+  } catch (e) {
+    return protocolId;
+  }
+}
+
 class FastingScreen extends ConsumerStatefulWidget {
   const FastingScreen({super.key});
 
@@ -77,13 +89,17 @@ class _FastingScreenState extends ConsumerState<FastingScreen> {
             targetHours: targetHours,
             notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
           );
-      _notesController.clear();
-      _customHoursController.clear();
-      ref.invalidate(activeFastingSessionProvider);
-      ref.invalidate(recentFastingSessionsProvider);
+      if (mounted) {
+        _notesController.clear();
+        _customHoursController.clear();
+        ref.invalidate(activeFastingSessionProvider);
+        ref.invalidate(recentFastingSessionsProvider);
+      }
     } catch (e) {
       debugPrint('startFast failed: $e');
-      setState(() => _error = e is StateError ? e.message : 'No pudimos iniciar el ayuno. Intenta de nuevo.');
+      if (mounted) {
+        setState(() => _error = e is StateError ? e.message : 'No pudimos iniciar el ayuno. Intenta de nuevo.');
+      }
     } finally {
       if (mounted) setState(() => _starting = false);
     }
@@ -93,11 +109,15 @@ class _FastingScreenState extends ConsumerState<FastingScreen> {
     setState(() => _ending = true);
     try {
       await ref.read(fastingSessionsRepositoryProvider).endFast(id);
-      ref.invalidate(activeFastingSessionProvider);
-      ref.invalidate(recentFastingSessionsProvider);
+      if (mounted) {
+        ref.invalidate(activeFastingSessionProvider);
+        ref.invalidate(recentFastingSessionsProvider);
+      }
     } catch (e) {
       debugPrint('endFast failed: $e');
-      setState(() => _error = 'No pudimos terminar el ayuno. Intenta de nuevo.');
+      if (mounted) {
+        setState(() => _error = 'No pudimos terminar el ayuno. Intenta de nuevo.');
+      }
     } finally {
       if (mounted) setState(() => _ending = false);
     }
@@ -120,11 +140,15 @@ class _FastingScreenState extends ConsumerState<FastingScreen> {
     setState(() => _canceling = true);
     try {
       await ref.read(fastingSessionsRepositoryProvider).cancelFast(id);
-      ref.invalidate(activeFastingSessionProvider);
-      ref.invalidate(recentFastingSessionsProvider);
+      if (mounted) {
+        ref.invalidate(activeFastingSessionProvider);
+        ref.invalidate(recentFastingSessionsProvider);
+      }
     } catch (e) {
       debugPrint('cancelFast failed: $e');
-      setState(() => _error = 'No pudimos cancelar el ayuno. Intenta de nuevo.');
+      if (mounted) {
+        setState(() => _error = 'No pudimos cancelar el ayuno. Intenta de nuevo.');
+      }
     } finally {
       if (mounted) setState(() => _canceling = false);
     }
@@ -322,12 +346,13 @@ class _ActiveFastCard extends StatelessWidget {
     final elapsed = DateTime.now().difference(session.startAt);
     final targetSeconds = Duration(hours: session.targetHours).inSeconds;
     final progress = (elapsed.inSeconds / targetSeconds).clamp(0.0, 1.0);
+    final protocolLabel = _getProtocolLabel(session.protocol);
 
     return HeroCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Ayuno en curso - ${session.protocol}', style: theme.textTheme.headlineMedium),
+          Text('Ayuno en curso - $protocolLabel', style: theme.textTheme.headlineMedium),
           const SizedBox(height: 8),
           Text(formatFastingDuration(elapsed), style: theme.textTheme.displaySmall),
           const SizedBox(height: 4),
@@ -345,7 +370,7 @@ class _ActiveFastCard extends StatelessWidget {
             children: [
               Expanded(
                 child: FilledButton(
-                  onPressed: ending ? null : onEnd,
+                  onPressed: (ending || canceling) ? null : onEnd,
                   child: ending
                       ? const SizedBox(
                           width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
@@ -355,7 +380,7 @@ class _ActiveFastCard extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: OutlinedButton(
-                  onPressed: canceling ? null : onCancel,
+                  onPressed: (ending || canceling) ? null : onCancel,
                   child: canceling
                       ? const SizedBox(
                           width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
@@ -384,6 +409,7 @@ class _FastingHistoryRow extends StatelessWidget {
         '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
     // fetchHistory() only returns rows where end_at is not null.
     final duration = session.endAt!.difference(session.startAt);
+    final protocolLabel = _getProtocolLabel(session.protocol);
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -398,7 +424,7 @@ class _FastingHistoryRow extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(session.protocol, style: theme.textTheme.titleMedium),
+              Text(protocolLabel, style: theme.textTheme.titleMedium),
               Text(formatted, style: theme.textTheme.bodySmall?.copyWith(color: semantics.mutedForeground)),
             ],
           ),
