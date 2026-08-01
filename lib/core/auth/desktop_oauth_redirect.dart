@@ -98,7 +98,9 @@ class DesktopOAuthRedirect {
           continue;
         }
 
-        debugPrint('[oauth] callback received: ${uri.path}?${uri.query}');
+        // Path only, never the query: it carries Clerk's handshake token, and
+        // debugPrint still writes to the log in release builds.
+        debugPrint('[oauth] callback received on ${uri.path}');
         request.response
           ..statusCode = HttpStatus.ok
           ..headers.contentType = ContentType.html
