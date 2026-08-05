@@ -1,19 +1,12 @@
-import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/macro_goal.dart';
+import '../auth/auth_providers.dart';
 import '../local_db/cached_fetch.dart';
 import '../local_db/providers.dart';
 import 'api_client.dart';
 import 'nutriflow_api.dart';
-
-/// Set once in main() after ClerkAuthState is created, before runApp -
-/// every other provider that needs auth or the API client reads through
-/// this rather than each constructing its own ClerkAuthState.
-final clerkAuthProvider = Provider<ClerkAuthState>((ref) {
-  throw UnimplementedError('clerkAuthProvider must be overridden in main()');
-});
 
 final nutriFlowApiProvider = Provider<NutriFlowApi>((ref) {
   final clerkAuth = ref.watch(clerkAuthProvider);

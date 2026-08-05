@@ -19,8 +19,13 @@ class MealLogsRepository {
 
   final LocalCache _cache;
 
-  /// Today keeps its original key so the cache written by previous versions
-  /// stays readable after an upgrade; other days get a dated key.
+  /// Today gets a fixed key; other days get a dated one.
+  ///
+  /// This used to also preserve the cache written by earlier builds across an
+  /// upgrade. It no longer can: [ScopedLocalCache] namespaces every key by
+  /// account, so the old unscoped entries are unreachable and get purged. The
+  /// cost is one cold fetch on first launch after updating, which is the right
+  /// trade for not serving one account's meals to another.
   static const _cacheKey = 'today_meals';
 
   /// Today's logged meal items (local device day), newest first.

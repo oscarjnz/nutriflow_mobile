@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/app.dart';
-import 'core/api/providers.dart';
+import 'core/auth/auth_providers.dart';
 import 'core/auth/clerk_bootstrap.dart';
 import 'core/auth/desktop_oauth_redirect.dart';
 import 'core/env/app_env.dart';

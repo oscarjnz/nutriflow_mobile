@@ -1,27 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nutriflow_mobile/core/local_db/cached_fetch.dart';
-import 'package:nutriflow_mobile/core/local_db/local_cache.dart';
 
-class _FakeLocalCache implements LocalCache {
-  _FakeLocalCache({this.putCacheError});
-
-  final Map<String, Object?> _store = {};
-  final Object? putCacheError;
-
-  @override
-  Future<void> putCache(String key, Object? jsonEncodable) async {
-    if (putCacheError != null) throw putCacheError!;
-    _store[key] = jsonEncodable;
-  }
-
-  @override
-  Future<Object?> getCache(String key) async => _store[key];
-}
+import 'support/fake_local_cache.dart';
 
 void main() {
   group('cachedFetch', () {
     test('caches and returns the network value on success', () async {
-      final cache = _FakeLocalCache();
+      final cache = FakeLocalCache();
 
       final result = await cachedFetch<int>(
         cache: cache,
@@ -36,7 +21,7 @@ void main() {
     });
 
     test('falls back to the cached value when the network call throws', () async {
-      final cache = _FakeLocalCache();
+      final cache = FakeLocalCache();
       await cache.putCache('k', 41);
 
       final result = await cachedFetch<int>(
@@ -51,7 +36,7 @@ void main() {
     });
 
     test('rethrows when the network call throws and nothing is cached', () async {
-      final cache = _FakeLocalCache();
+      final cache = FakeLocalCache();
 
       expect(
         () => cachedFetch<int>(
@@ -65,7 +50,7 @@ void main() {
     });
 
     test('calls onNetworkError with the original error before falling back', () async {
-      final cache = _FakeLocalCache();
+      final cache = FakeLocalCache();
       await cache.putCache('k', 1);
       Object? seenError;
 
@@ -81,7 +66,7 @@ void main() {
     });
 
     test('returns the fresh value when caching it fails, not stale data', () async {
-      final cache = _FakeLocalCache(putCacheError: Exception('disk full'));
+      final cache = FakeLocalCache(putCacheError: Exception('disk full'));
 
       final result = await cachedFetch<int>(
         cache: cache,
@@ -95,7 +80,7 @@ void main() {
     });
 
     test('calls onCacheWriteError, not onNetworkError, when only the cache write fails', () async {
-      final cache = _FakeLocalCache(putCacheError: Exception('disk full'));
+      final cache = FakeLocalCache(putCacheError: Exception('disk full'));
       Object? networkError;
       Object? cacheWriteError;
 
@@ -115,7 +100,7 @@ void main() {
     });
 
     test('rethrows the network error when the cached value no longer matches decode', () async {
-      final cache = _FakeLocalCache();
+      final cache = FakeLocalCache();
       await cache.putCache('k', {'unexpected': 'shape'});
 
       expect(
