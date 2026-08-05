@@ -308,6 +308,22 @@ Seguido de Fase 3.5, se implemento el wizard de onboarding completo (~15 campos 
 
 > La mantengo yo (Claude), no Oscar. Entrada nueva (mas reciente arriba) cada vez que hay un cambio de alcance, una decision no trivial, un error de raiz, o una confirmacion de un enfoque no estandar. Esta seccion es la que leo primero para no repetir trabajo ni errores ya resueltos.
 
+### 2026-08-05 (QA en el Galaxy A55) - Todo renderiza y la red va; tres defectos abiertos
+
+Primer QA real en el telefono despues de la migracion a produccion, manejandolo por `adb` (`input tap` + `screencap`, ver el truco anotado abajo) en vez de pedir capturas.
+
+**Verificado a pantalla:** sesion de Clerk ya persistida (arranca dentro, sin volver a loguearse), dashboard con datos reales contra el backend HTTPS, el menu de cuenta nuevo, calendario con las comidas del dia, perfil, peso, ayuno, y **la camara del escaner de codigo de barras con feed real** - eso nunca se habia probado en un dispositivo fisico, solo en el emulador con la camara en negro (pendiente desde el 2026-07-17). Con el backend en HTTPS publico, **`env.json` ya sirve igual en Windows y en el telefono**: se acabo el ida y vuelta de `API_BASE_URL` entre `localhost` y la IP LAN, y no hace falta abrir el 3002 en el firewall.
+
+**Defectos abiertos, ninguno bloqueante:**
+
+1. **`setState() or markNeedsBuild() called during build`, dos veces al arrancar** y nunca despues, ni navegando. Por la pila: `currentUserIdProvider` (`lib/core/auth/auth_providers.dart`) llama `ref.invalidateSelf()` desde el listener del `ChangeNotifier` de Clerk; al arrancar el id pasa de `null` al id real cuando Clerk restaura la sesion, y esa invalidacion cae dentro de una fase de build (`_TickerModeState.didUpdateWidget` -> `ConsumerStatefulElement._updateTickerMode` -> `resume` -> `flush` -> el `Ref.watch` de `localCacheProvider` -> `_invalidateSelf` -> `setState` sobre el `UncontrolledProviderScope`). **Corrige un supuesto escrito en ese mismo archivo:** el comentario dice que las notificaciones no-op de Clerk "no cuestan nada", y es cierto para los dependientes pero no para el `invalidateSelf`, que agenda trabajo igual. Fix candidato: recordar el ultimo id y no invalidar si no cambio.
+2. **Los chips de tipo de comida se truncan** en `LoggingScreen` a ancho de telefono: se lee "Desayun" y "Almue".
+3. **El ayuno solo se alcanza desde un icono dentro de la pantalla de peso** (`weight_log_screen.dart:103`), sin entrada propia en la barra de navegacion. Poco descubrible para una feature principal.
+
+**Ademas:** la tarjeta "Resumen de hoy" usa un emoji decorativo, contra la regla de emojis limitados de la seccion 5. Y quedaron dos "Huevo entero" duplicados de las pruebas que **no se pueden borrar desde la app** (editar/borrar sigue sin existir).
+
+**Truco para manejar el telefono desde aqui:** `adb` no esta en el PATH, esta en `~/AppData/Local/Android/Sdk/platform-tools/adb.exe`. Y **Git Bash convierte las rutas del dispositivo**: `screencap -p /sdcard/s.png` se transforma en una ruta de Windows y falla con el usage de `screencap`; hay que prefijar `MSYS_NO_PATHCONV=1`. Las coordenadas de `input tap` son pixeles fisicos (1080x2340 aqui), y leer la posicion de un icono a ojo desde la captura se equivoca facil por decenas de pixeles: si un toque no hace nada, probar unos pixeles hacia adentro antes de concluir que el boton esta roto.
+
 ### 2026-08-05 (Bloque D) - Fuera el `ClerkUserButton`: la cuenta ahora se ve como el resto de la app
 
 Oscar pidio que la "tarjeta de Clerk arriba a la derecha" dejara de verse asi, porque ya no estamos en prueba.
