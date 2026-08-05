@@ -37,7 +37,7 @@ Future<ClerkAuthState> bootstrapClerk({
       // on desktop.
       redirectionGenerator: desktopRedirect == null
           ? null
-          : (context, strategy) => desktopRedirect.redirectUri,
+          : (context, strategy) => desktopRedirect.beginAttempt(),
       deepLinkStream: desktopRedirect?.deepLinks,
     ),
   );
