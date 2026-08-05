@@ -20,7 +20,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # versionCode de Android: solo sube, nunca se repite ni baja, porque Google
 # Play rechaza para siempre un versionCode ya usado. 1.0.0 se reserva para
 # cuando la app funcione de punta a punta para alguien que no sea el autor.
-version: 0.1.0+1
+version: 0.1.1+2
 
 environment:
   sdk: ^3.12.1
