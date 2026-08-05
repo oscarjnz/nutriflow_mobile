@@ -1,6 +1,7 @@
 import 'package:clerk_flutter/clerk_flutter.dart';
 
 import '../env/app_env.dart';
+import 'clerk_localizations_es.dart';
 import 'desktop_oauth_redirect.dart';
 
 /// Creates the single [ClerkAuthState] the app runs on. Built once in
@@ -18,9 +19,18 @@ import 'desktop_oauth_redirect.dart';
 Future<ClerkAuthState> bootstrapClerk({
   DesktopOAuthRedirect? desktopRedirect,
 }) {
+  final spanish = ClerkSdkLocalizationsEs();
   return ClerkAuthState.create(
     config: ClerkAuthConfig(
       publishableKey: AppEnv.clerkPublishableKey,
+      // Clerk picks its copy from the *device* locale
+      // (`ClerkAuthState.localizationsOf`), so a phone set to English would
+      // otherwise show English inside an app that is Spanish everywhere else.
+      // Registering Spanish and nothing else, with Spanish as the fallback,
+      // makes the choice unconditional - which is the intent: NutriFlow's UI
+      // is Spanish (CLAUDE.md section 5), not "whatever the phone is set to".
+      localizations: {'es': spanish},
+      fallbackLocalization: spanish,
       // Returning a non-null Uri here is what makes `ssoSignIn` call
       // `launchUrl` instead of showing its WebView dialog. The strategy is
       // ignored: every SSO strategy this app offers needs the same treatment
