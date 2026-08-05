@@ -56,11 +56,13 @@ Detras: Clerk en **produccion** con dominio propio (`nutriflow.dpdns.org`), Supa
 
 **Ultimo hito verificado (2026-08-05):** **Clerk esta en PRODUCCION con dominio propio (`nutriflow.dpdns.org`) y el login funciona end-to-end en Windows**, con la app completa detras (onboarding con cuenta nueva + dashboard, todos los endpoints devolviendo 200). Ojo con dos cosas al retomar: eso se verifico sobre `master`, o sea sobre el fix de deep link viejo, **no sobre el loopback RFC 8252 que usa `main`** (ver el aviso de la entrada del 2026-08-02 sobre la whitelist de redirect URLs de la instancia de produccion); y **en el Galaxy A55 el login de produccion no se ha vuelto a probar** desde la migracion. Detalle completo en las entradas de bitacora del 2026-08-02 y 2026-08-05.
 
-**LO PRIMERO DE LA PROXIMA SESION, en orden (definido al cierre del 2026-08-05):**
-1. **Rotar la `CLERK_SECRET_KEY` de produccion.** Expuesta en el chat dos veces (08-02 y 08-05), sin rotar. Da control total sobre los usuarios de produccion. Clerk Dashboard > API Keys, y actualizarla en Vercel y en `nutriflow/.env.local`.
-2. **Confirmar el login de Windows** con `flutter run -d windows --dart-define-from-file=env.json`, buscando en el log la linea `callback carried no nf parameter` (ver la entrada de bitacora "Bloque B" de ese dia).
-3. **Firmar el release:** la keystore ya existe en `C:\Users\oscar\nutriflow-release.jks` (alias `nutriflow`). Falta `android/key.properties` (ya gitignored) y los `signingConfigs` en `android/app/build.gradle.kts`, que hoy sigue firmando con debug keys. Nunca pedir la contrasena por chat.
-4. **Sacar el APK release y publicarlo** en GitHub Releases con tag nuevo (el `versionCode` solo sube).
+**LO PRIMERO DE LA PROXIMA SESION: sacar el APK. Falta UNA sola cosa, y es de Oscar.**
+
+El pipeline ya esta listo y probado: `flutter build apk --release --dart-define-from-file=env.json` corre limpio y produce `build\app\outputs\flutter-apk\app-release.apk` (80.1 MB), el backend ya es HTTPS publico, y el `network_security_config` de cleartext ya no existe. Los `signingConfigs` quedaron cableados en `android/app/build.gradle.kts` el 2026-08-05: leen `android/key.properties` si existe y **caen a las debug keys si no**, para que un clon sin keystore siga compilando.
+
+1. **Falta `android/key.properties`** (gitignored). Lo crea Oscar a mano, nunca por chat, porque lleva contrasenas. Cuatro lineas: `storeFile=C:\\Users\\oscar\\nutriflow-release.jks`, `storePassword=`, `keyAlias=nutriflow`, `keyPassword=`. En cuanto exista, el mismo comando produce un APK firmado de verdad. **Un APK firmado con debug keys se puede instalar a mano pero NO se puede publicar en Play, y la firma de una app no se puede cambiar despues, asi que el primer build publicado ya tiene que llevar la llave real.**
+2. Despues: subir el APK a GitHub Releases con tag nuevo (el `versionCode` solo sube, nunca se repite). Hoy la version es `0.1.0+1`.
+3. **Sigue pendiente aparte: rotar la `CLERK_SECRET_KEY` de produccion.** Expuesta en el chat dos veces (08-02 y 08-05), sin rotar. Da control total sobre los usuarios de produccion. Clerk Dashboard > API Keys, y actualizarla en Vercel y en `nutriflow/.env.local`. No bloquea el APK, pero es la deuda de seguridad mas vieja abierta.
 
 **Siguiente accion concreta (decidir con Oscar):** (0) **verificar que el login de Windows sigue funcionando ahora que el checkout esta en `main`** - es lo unico que cambio de mecanismo (loopback en vez de `com.clerk.flutter://`) y es lo que puede romperse contra la instancia de produccion de Clerk; (a) **QA manual del feature de weight logs + cache offline en el Galaxy A55** (guardar peso, ver historial, apagar red y confirmar que el dashboard y la pantalla de peso siguen mostrando datos con el banner de "sin conexion"), primera vez que haya un dispositivo fisico disponible; (b) revisar y commitear en `nutriflow` los endpoints REST que ahi siguen sin commitear (`goals`, `logging/log-meal`, `foods/barcode-lookup`, `foods/selectable`, `onboarding/status`) + los demas archivos pendientes de sesiones previas; (c) **probar el wizard de onboarding de punta a punta con una cuenta nueva** (todavia no se hizo, solo se verifico que no rompe cuentas ya onboardeadas); (d) seguir con el resto de Fase 3 (edicion de foods, favorites/recipes) - weight logs, el cache local y el fasting timer ya estan hechos.
 
@@ -178,7 +180,7 @@ macro-fat:     hsl(18 70% 58%)
 - Cero em dash (`—`) en cualquier texto de UI o comentario. Guion normal `-` unicamente.
 - Texto de UI en espanol. Codigo, identificadores, comentarios en ingles.
 - Contraste AA en todo control interactivo.
-- **Emojis limitados en toda la app (decidido 2026-08-01, pedido explicito de Oscar):** el objetivo es que la app no se sienta "hecha con IA". Nada de emojis decorativos en copy de UI, textos vacios (empty states), mensajes de error, ni titulos. Aplica tambien a las notificaciones push (seccion 8, backlog de Notificaciones) sin excepcion. Iconos Lucide (ya definidos arriba) siguen siendo el vehiculo visual normal; un emoji puntual solo se justifica si aporta algo que un icono no puede (a confirmar caso por caso con Oscar, no por defecto).
+- **Emojis limitados en toda la app (decidido 2026-08-01, pedido explicito de Oscar; alcance precisado el 2026-08-05: la regla aplica de aqui en adelante, los emojis ya existentes se quedan salvo que sean muy innecesarios - no hacer una caceria retroactiva).** El objetivo es que la app no se sienta "hecha con IA". Nada de emojis decorativos en copy de UI, textos vacios (empty states), mensajes de error, ni titulos. Aplica tambien a las notificaciones push (seccion 8, backlog de Notificaciones) sin excepcion. Iconos Lucide (ya definidos arriba) siguen siendo el vehiculo visual normal; un emoji puntual solo se justifica si aporta algo que un icono no puede (a confirmar caso por caso con Oscar, no por defecto).
 - **Ningun widget de UI de `clerk_flutter` va en una pantalla propia de la app** (decidido 2026-08-05). Traen su propio theme extension y siempre desentonan; `ClerkUserButton`, en particular, no es un boton sino una tarjeta completa en linea. La cuenta se maneja con `shared/widgets/account_menu.dart`. Unica excepcion: los paneles de sign-in/sign-up, que si son de Clerk por diseno.
 - **La pantalla de login de Clerk esta en espanol desde el 2026-08-05** (`lib/core/auth/clerk_localizations_es.dart`, cableado via `localizations`/`fallbackLocalization` en `clerk_bootstrap.dart`). Ya no queda ninguna pantalla de la app en ingles. Ojo si se actualiza `clerk_flutter`: la clase extiende la implementacion inglesa, asi que una version nueva que agregue cadenas compila igual pero las muestra en ingles - ver la entrada de bitacora del 2026-08-05 (Bloque A).
 
@@ -237,6 +239,15 @@ nutriflowMobile/
 | 3 | Paridad ampliada: onboarding completo, edicion de foods, fasting timer, weight logs, favorites/recipes, offline-first | **Onboarding completo HECHO** (2026-07-17 noche); **weight logs + cache local de lectura HECHO** (2026-07-30); **fasting timer HECHO** (2026-07-31, revisado y publicado en `main`; solo falta el QA manual en dispositivo fisico); falta edicion de foods, favorites/recipes | este repo |
 | 3.5 | **Captura de comida por codigo de barras + busqueda por nombre** (pedido por Oscar 2026-07-17) | **HECHO** (2026-07-17 noche), ver detalle abajo | ambos repos |
 | 4 | Distribucion Android/iOS | Pendiente | este repo |
+
+### Backlog (pedido por Oscar 2026-08-05, explicitamente "para luego, no ahora")
+
+Todo esto se decidio como trabajo futuro el mismo dia que se cerraron los bloques C y D, con la instruccion de registrarlo como sprint/fase y **no tocarlo todavia**.
+
+1. **Reestructurar "Comidas de hoy" para que una comida sea un grupo, no filas sueltas.** El caso que lo motivo: el desayuno de Oscar fueron *dos huevos y pan*, y hoy eso aparece como entradas separadas e indistinguibles. Lo que quiere: que el desayuno se muestre como una unidad ("el desayuno fue tal y tal cosa, en total tantas calorias") y **subdividido** debajo, con cada alimento y sus propias calorias. O sea, agrupar `meal_items` por su `meal_log` en la UI, que es como el modelo de datos ya esta hecho: `meal_logs` (la comida) tiene N `meal_items` (los alimentos). Hoy `fetchEntriesForDay` aplana ese join y pierde el agrupamiento.
+2. **Poder quitar o modificar un registro, incluidas las calorias.** Va junto con lo anterior: sin esto no hay forma de corregir una comida mal registrada (ahora mismo hay dos "Huevo entero" duplicados que solo se pueden borrar con SQL). `meal_items`/`meal_logs` ya tienen `deleted_at` y politicas RLS de UPDATE/DELETE, asi que el borrado logico y la edicion ya estan soportados del lado de la base.
+3. **Notificacion del ayuno con el contador en vivo**, del tipo "media en curso" (como el widget de Spotify): que muestre el tiempo transcurrido actualizandose y la hora a la que se inicio. Es el punto 1 del backlog de notificaciones de mas abajo, ahora con el detalle de que debe verse la hora de inicio ademas del contador.
+4. **Etiquetas de protocolo de ayuno mas claras.** Hoy dicen `12:12`, `16:8`, `20:4`, que a simple vista **parecen una hora del dia**. Deben decir lo que son: horas de ayuno y horas de ventana de comida. Ojo con el constraint `fasting_sessions_protocol_check`, que guarda exactamente esos ids (`12:12, 14:10, 16:8, 18:6, 20:4, custom`): esto es un cambio de **etiqueta en la UI**, no del valor que se persiste. Y mantener el personalizado, donde el usuario pone el tiempo que quiera.
 
 ### Backlog (pedido por Oscar 2026-08-01, no priorizado todavia)
 
@@ -307,6 +318,19 @@ Seguido de Fase 3.5, se implemento el wizard de onboarding completo (~15 campos 
 ## 10. Bitacora viva
 
 > La mantengo yo (Claude), no Oscar. Entrada nueva (mas reciente arriba) cada vez que hay un cambio de alcance, una decision no trivial, un error de raiz, o una confirmacion de un enfoque no estandar. Esta seccion es la que leo primero para no repetir trabajo ni errores ya resueltos.
+
+### 2026-08-05 (cierre) - Los tres defectos del QA, corregidos y verificados en el telefono
+
+**1. La invalidacion que caia dentro de un build.** Eran dos causas distintas con el mismo sintoma, y arreglar solo la primera hizo visible la segunda:
+- `currentUserIdProvider` usaba `ref.invalidateSelf()` desde el listener de Clerk. **`invalidateSelf` no recomputa: solo marca sucio**, y la recomputacion ocurre cuando algo lo *flushea*. En el A55 ese flush caia dentro de un build (una transicion de ruta cambia el `TickerMode`, `flutter_riverpod` reanuda sus suscripciones y flushea ahi mismo), y la notificacion resultante hacia que Riverpod llamara `setState` sobre el scope mientras el framework construia. Ahora es un `Notifier` que publica con `state =`, que aplica el cambio en el acto y no deja nada sucio pendiente, mas una guarda que ignora las notificaciones donde el id no cambio (las de refresco de token, que son la mayoria) y un aplazamiento a post-frame para cuando Clerk notifica en medio de un build.
+- Con eso el arranque quedo limpio, **y aparecio la misma excepcion al volver de `/log`**: el `ref.invalidate(todayMealEntriesProvider)` que corre despues de `await context.push('/log')` se ejecuta mientras la transicion de salida todavia esta reconstruyendo, dejando el provider sucio justo para que el `TickerMode` lo flushee. Se aplazo un frame con `addPostFrameCallback`.
+- **Regla general que sale de aqui: invalidar un provider justo despues de un `await` de navegacion, o desde el callback de un `ChangeNotifier`, es una carrera contra la fase de build. Si el valor se puede publicar directo (`state =`), preferir eso; si hay que invalidar, hacerlo en un post-frame.**
+
+**2. Los chips de tipo de comida truncados.** Eran un `Row` de cuatro `Expanded`, o sea cuatro cuartos exactos del ancho: a ancho de telefono "Desayuno" se leia "Desayun". Ahora es un `Wrap`, donde cada chip mide lo que mide su etiqueta y baja de linea si hace falta.
+
+**3. El ayuno era casi inalcanzable.** Solo se llegaba por un icono dentro de la pantalla de peso. Se agrego una entrada propia en "Seguimiento" del perfil, junto a peso e historial, que es donde alguien la buscaria.
+
+**Verificado en el Galaxy A55, no solo compilado:** cero excepciones en el log al arrancar, al entrar y salir de `/log`, y al abrir el perfil (antes salian dos al arrancar y una por cada vuelta de `/log`); chips completos; y la entrada de Ayuno en su sitio. `flutter analyze` 0 errores, `flutter test` 63/63.
 
 ### 2026-08-05 (QA en el Galaxy A55) - Todo renderiza y la red va; tres defectos abiertos
 

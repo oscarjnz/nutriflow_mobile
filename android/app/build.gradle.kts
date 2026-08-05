@@ -1,8 +1,28 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// Release signing credentials, kept out of the repository (android/key.properties
+// is gitignored, as are *.jks/*.keystore). Absent on a fresh clone and on CI,
+// which is why every use below is conditional: without it the release build
+// falls back to the debug keys and still succeeds, so nobody is blocked - it
+// just cannot be published.
+//
+// The file is four lines and holds passwords, so it is created by hand, never
+// through a chat:
+//   storeFile=C:\\Users\\oscar\\nutriflow-release.jks
+//   storePassword=...
+//   keyAlias=nutriflow
+//   keyPassword=...
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("key.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+val hasReleaseKeystore = keystoreProperties.getProperty("storeFile") != null
 
 android {
     namespace = "com.nutriflow.nutriflow_mobile"
@@ -25,21 +45,30 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            //
-            // TODO (same change, do not ship without it): before any Play
-            // upload, also remove `android:networkSecurityConfig` from
-            // src/main/AndroidManifest.xml and delete
-            // src/main/res/xml/network_security_config.xml. That file allows
-            // cleartext HTTP globally so release APKs installed on a test
-            // phone can reach the dev backend over the LAN, which is exactly
-            // what must not reach real users. This TODO lives here because
-            // this line is the one that has to change to publish, so it is
-            // the one that actually gets read.
-            signingConfig = signingConfigs.getByName("debug")
+            // Falls back to the debug keys when key.properties is missing, so
+            // a clone without the keystore still builds and runs. An APK
+            // signed that way is fine to sideload and impossible to publish:
+            // Play rejects debug-signed uploads, and an app's signature can
+            // never change afterwards, so the first published build must
+            // already carry the real key.
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }
