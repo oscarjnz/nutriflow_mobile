@@ -307,6 +307,29 @@ Seguido de Fase 3.5, se implemento el wizard de onboarding completo (~15 campos 
 
 > La mantengo yo (Claude), no Oscar. Entrada nueva (mas reciente arriba) cada vez que hay un cambio de alcance, una decision no trivial, un error de raiz, o una confirmacion de un enfoque no estandar. Esta seccion es la que leo primero para no repetir trabajo ni errores ya resueltos.
 
+### 2026-08-05 (Bloque C) - "No registra las comidas" era "no las lee": el claim `role` que no viaja a produccion
+
+Oscar reporto que buscar una comida funcionaba (los candidatos del catalogo aparecian) pero al tocar "Registrar" la app hacia como que registraba y el dia se quedaba en cero, hoy o ayer, sin ningun error a la vista.
+
+**El registro nunca estuvo roto, y ese fue todo el hallazgo.** Escritura y lectura van por caminos distintos (seccion 6 de este archivo): escribir una comida pasa por `POST /api/logging/log-meal`, que habla con Postgres directo y **nunca ve RLS**; leer el dashboard pasa por Supabase directo, donde RLS decide todo. Una consulta a la base lo zanjo en un minuto: las filas de `meal_logs`/`meal_items` estaban ahi desde el primer intento. El fallo era de lectura.
+
+**La causa raiz, verificada capturando el JWT real que la app manda** (`debugPrint` temporal en `currentClerkToken`, decodificando el payload con `base64Url.normalize` + `utf8.decode`): el token de la instancia de **produccion** no trae el claim `"role": "authenticated"`.
+
+```
+{"exp":...,"iss":"https://clerk.nutriflow.dpdns.org","sid":...,"sub":"user_3HTnwy...","v":2}
+```
+
+**Y esto es lo que hay que recordar: PostgREST no rechaza un token sin `role`, lo degrada a `anon`.** Como todas las politicas RLS de este proyecto estan otorgadas `TO authenticated`, la consulta no falla: devuelve **cero filas con HTTP 200**. Ni 401, ni banner de "sin conexion", ni entrada en el log. Silencio perfecto, indistinguible de "no has registrado nada". Confirmado contra la base viva: con el mismo `sub` pero forzando `set local request.jwt.claims` con `role = authenticated`, la misma consulta devuelve las 2 comidas del dia.
+
+**Por que aparecio recien ahora:** ese claim se configura en el dashboard de Clerk (Configure > Sessions > Customize session token) y es **por instancia**. Se habia configurado en la instancia de desarrollo en la Fase 0 (2026-07-10). La instancia de produccion es una instancia nueva, con esa personalizacion en blanco; la migracion del 2026-08-02 movio dominio, llaves e issuer, pero no esto. **Suma un cuarto item a la lista de "lo que NO se hereda al pasar Clerk a produccion"** de la entrada del 2026-08-01 (usuarios, credenciales de Google OAuth, redirect URLs, y ahora la personalizacion del session token). Oscar lo aplico en el dashboard y el registro quedo funcionando.
+
+**Como distinguir los tres fallos de auth que se parecen, por codigo HTTP** (los tres se sienten igual: "la sesion esta bien pero no veo datos"):
+- **404 en `/api/*`** -> `auth.protect()` del middleware de Clerk, casi nunca una ruta faltante (entrada del 2026-08-05).
+- **401 desde Supabase** con "No suitable key was found to decode the JWT" -> el `domain` de Third-Party Auth no coincide con el issuer real (entrada del 2026-07-10).
+- **200 con la respuesta vacia** -> el claim `role` ausente. Este.
+
+**Arreglo de codigo, porque el defecto de fondo no es el claim sino que fallar asi era invisible:** `lib/core/supabase/supabase_role_claim.dart` (`jwtCarriesAuthenticatedRole`) valida el claim dentro del callback `accessToken` de `bootstrapSupabase` y **lanza** con un mensaje que nombra el arreglo exacto, en vez de dejar pasar un token que va a leer como anonimo. 4 tests, uno con el conjunto de claims literal capturado hoy. `flutter analyze` 0 errores (los 7 infos preexistentes), `flutter test` **61/61** (eran 57).
+
 ### 2026-08-05 (Bloque B) - El login de escritorio no estaba "sin autorizar": era imposible de autorizar
 
 Al pasar la app al backend HTTPS de produccion quedaba una advertencia anotada: el flujo loopback RFC 8252 de `main` nunca se habia probado contra la instancia de **produccion** de Clerk. Oscar reclamo, con razon, por que se dejo como advertencia en vez de resolverse. Al sondearlo resulto estar **roto**, y por un motivo estructural.
