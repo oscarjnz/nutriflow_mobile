@@ -12,6 +12,7 @@ import '../../models/day_macro_totals.dart';
 import '../../models/macro_goal.dart';
 import '../../shared/date_labels.dart';
 import '../../shared/meal_type.dart';
+import '../../shared/widgets/account_menu.dart';
 import '../../shared/widgets/bento_metric_card.dart';
 import '../../shared/widgets/floating_nav_bar.dart';
 import '../../shared/widgets/hero_card.dart';
@@ -93,7 +94,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      const ClerkUserButton(),
+                      const AccountAvatarButton(),
                     ],
                   ),
                   const SizedBox(height: 4),

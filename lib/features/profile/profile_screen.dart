@@ -8,6 +8,7 @@ import '../../core/api/providers.dart';
 import '../../core/theme/colors.dart';
 import '../../core/theme/radii.dart';
 import '../../models/macro_goal.dart';
+import '../../shared/widgets/account_menu.dart';
 
 /// Account and targets. Identity comes from Clerk (the session already in
 /// memory, no extra call); the macro targets come from `GET /api/goals`
@@ -19,7 +20,6 @@ class ProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final semantics = theme.extension<NutriFlowSemanticColors>()!;
     final user = ClerkAuth.userOf(context);
     final goal = ref.watch(goalProvider);
 
@@ -75,31 +75,12 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 24),
             Text('Cuenta', style: theme.textTheme.headlineMedium),
             const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: semantics.card,
-                borderRadius: BorderRadius.circular(NutriFlowRadii.card),
-                border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Para cerrar sesion o cambiar tu cuenta, usa el menu de tu '
-                    'avatar. Lo maneja Clerk directamente, asi la sesion se '
-                    'cierra tambien del lado del servidor.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: semantics.mutedForeground,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: ClerkUserButton(),
-                  ),
-                ],
-              ),
+            _ActionTile(
+              icon: LucideIcons.logOut,
+              title: 'Cerrar sesion',
+              subtitle: 'Termina la sesion en este dispositivo',
+              destructive: true,
+              onTap: () => confirmSignOut(context),
             ),
           ],
         ),
@@ -128,7 +109,7 @@ class _IdentityCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _Avatar(imageUrl: imageUrl, name: name),
+          AccountAvatar(imageUrl: imageUrl, name: name, size: 64),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
@@ -155,49 +136,6 @@ class _IdentityCard extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _Avatar extends StatelessWidget {
-  const _Avatar({required this.imageUrl, required this.name});
-
-  final String? imageUrl;
-  final String name;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final semantics = theme.extension<NutriFlowSemanticColors>()!;
-    final initial = name.trim().isEmpty ? '?' : name.trim().characters.first.toUpperCase();
-
-    final fallback = Container(
-      width: 64,
-      height: 64,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(color: semantics.highlight, shape: BoxShape.circle),
-      child: Text(
-        initial,
-        style: theme.textTheme.headlineMedium?.copyWith(
-          color: semantics.highlightForeground,
-        ),
-      ),
-    );
-
-    if (imageUrl == null || imageUrl!.isEmpty) return fallback;
-
-    return ClipOval(
-      child: Image.network(
-        imageUrl!,
-        width: 64,
-        height: 64,
-        fit: BoxFit.cover,
-        // A broken avatar must never take the screen down with it.
-        errorBuilder: (context, error, stackTrace) {
-          debugPrint('[profile] avatar failed to load: $error');
-          return fallback;
-        },
       ),
     );
   }
@@ -356,6 +294,7 @@ class _ActionTile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.destructive = false,
   });
 
   final IconData icon;
@@ -363,10 +302,15 @@ class _ActionTile extends StatelessWidget {
   final String subtitle;
   final VoidCallback onTap;
 
+  /// Tints the icon (not the whole row) so the action reads as consequential
+  /// without shouting over the tiles above it.
+  final bool destructive;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final semantics = theme.extension<NutriFlowSemanticColors>()!;
+    final iconColor = destructive ? theme.colorScheme.error : semantics.cardForeground;
 
     return Material(
       color: Colors.transparent,
@@ -390,7 +334,7 @@ class _ActionTile extends StatelessWidget {
                   color: semantics.muted,
                   borderRadius: BorderRadius.circular(NutriFlowRadii.tile),
                 ),
-                child: Icon(icon, size: 20, color: semantics.cardForeground),
+                child: Icon(icon, size: 20, color: iconColor),
               ),
               const SizedBox(width: 14),
               Expanded(

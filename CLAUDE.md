@@ -179,6 +179,7 @@ macro-fat:     hsl(18 70% 58%)
 - Texto de UI en espanol. Codigo, identificadores, comentarios en ingles.
 - Contraste AA en todo control interactivo.
 - **Emojis limitados en toda la app (decidido 2026-08-01, pedido explicito de Oscar):** el objetivo es que la app no se sienta "hecha con IA". Nada de emojis decorativos en copy de UI, textos vacios (empty states), mensajes de error, ni titulos. Aplica tambien a las notificaciones push (seccion 8, backlog de Notificaciones) sin excepcion. Iconos Lucide (ya definidos arriba) siguen siendo el vehiculo visual normal; un emoji puntual solo se justifica si aporta algo que un icono no puede (a confirmar caso por caso con Oscar, no por defecto).
+- **Ningun widget de UI de `clerk_flutter` va en una pantalla propia de la app** (decidido 2026-08-05). Traen su propio theme extension y siempre desentonan; `ClerkUserButton`, en particular, no es un boton sino una tarjeta completa en linea. La cuenta se maneja con `shared/widgets/account_menu.dart`. Unica excepcion: los paneles de sign-in/sign-up, que si son de Clerk por diseno.
 - **La pantalla de login de Clerk esta en espanol desde el 2026-08-05** (`lib/core/auth/clerk_localizations_es.dart`, cableado via `localizations`/`fallbackLocalization` en `clerk_bootstrap.dart`). Ya no queda ninguna pantalla de la app en ingles. Ojo si se actualiza `clerk_flutter`: la clase extiende la implementacion inglesa, asi que una version nueva que agregue cadenas compila igual pero las muestra en ingles - ver la entrada de bitacora del 2026-08-05 (Bloque A).
 
 ---
@@ -306,6 +307,22 @@ Seguido de Fase 3.5, se implemento el wizard de onboarding completo (~15 campos 
 ## 10. Bitacora viva
 
 > La mantengo yo (Claude), no Oscar. Entrada nueva (mas reciente arriba) cada vez que hay un cambio de alcance, una decision no trivial, un error de raiz, o una confirmacion de un enfoque no estandar. Esta seccion es la que leo primero para no repetir trabajo ni errores ya resueltos.
+
+### 2026-08-05 (Bloque D) - Fuera el `ClerkUserButton`: la cuenta ahora se ve como el resto de la app
+
+Oscar pidio que la "tarjeta de Clerk arriba a la derecha" dejara de verse asi, porque ya no estamos en prueba.
+
+**El diagnostico, leyendo el paquete: `ClerkUserButton` no es un boton.** Pese al nombre, `clerk_flutter-0.0.17-beta/lib/src/widgets/user/clerk_user_button.dart` construye un `ClerkVerticalCard` completo **en linea**: fila de sesion con avatar, nombre y correo, un par de botones "Perfil"/"Cerrar sesion", filas extra de acciones y divisores, todo pintado con el theme extension **de Clerk**, no con el nuestro. Metido en la fila del encabezado del dashboard se lee como un panel ajeno atornillado a la pantalla, y esa es exactamente la impresion que daba. Estaba en dos lugares: el encabezado del dashboard y la seccion "Cuenta" del perfil.
+
+**Lo que quedo (`lib/shared/widgets/account_menu.dart`):** `AccountAvatarButton`, un avatar circular de 44 que abre un bottom sheet con los tokens de la seccion 5 (radio `card`, sombra `float`, colores semanticos): identidad arriba, luego "Ver perfil" y "Cerrar sesion" en color destructivo. En el perfil, la seccion "Cuenta" paso a ser un `_ActionTile` de "Cerrar sesion" igual a los demas tiles, en vez del texto que explicaba que el menu lo manejaba Clerk. `AccountAvatar` es ahora compartido: el perfil tenia su propia copia privada de 64px con la misma logica de fallback.
+
+**Lo que NO se reimplemento, a proposito:** el cierre de sesion sigue siendo `ClerkAuthState.signOut()` dentro de `safelyCall`, asi la sesion muere tambien del lado del servidor y cualquier fallo llega al `ClerkErrorListener` (entrada del 2026-07-31) en vez de perderse. Lo que se reemplazo es la presentacion, no el mecanismo de auth.
+
+**Regla que queda para adelante:** ningun widget de UI de `clerk_flutter` va en una pantalla propia de la app, salvo los paneles de sign-in/sign-up, que si son suyos por diseno (y ya estan en espanol, ver Bloque A). Traen su propio sistema de estilos y siempre van a desentonar.
+
+Ambas acciones piden confirmacion antes de cerrar sesion: en el dashboard el avatar queda a un toque del boton de registrar, y perder una sesion por un toque de mas obliga a repetir todo el login OAuth.
+
+`flutter analyze` 0 errores, `flutter test` **63/63**. **Sin verificacion visual todavia:** el build de Windows fallo con `MSB3027` porque una instancia de la app que Oscar tenia abierta bloqueaba `WebView2Loader.dll`, y no se cerro un proceso suyo por cuenta propia. Cerrar la app y relanzar es todo lo que hace falta.
 
 ### 2026-08-05 (Bloque C) - "No registra las comidas" era "no las lee": el claim `role` que no viaja a produccion
 
