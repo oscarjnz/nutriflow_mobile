@@ -173,7 +173,7 @@ macro-fat:     hsl(18 70% 58%)
 - Texto de UI en espanol. Codigo, identificadores, comentarios en ingles.
 - Contraste AA en todo control interactivo.
 - **Emojis limitados en toda la app (decidido 2026-08-01, pedido explicito de Oscar):** el objetivo es que la app no se sienta "hecha con IA". Nada de emojis decorativos en copy de UI, textos vacios (empty states), mensajes de error, ni titulos. Aplica tambien a las notificaciones push (seccion 8, backlog de Notificaciones) sin excepcion. Iconos Lucide (ya definidos arriba) siguen siendo el vehiculo visual normal; un emoji puntual solo se justifica si aporta algo que un icono no puede (a confirmar caso por caso con Oscar, no por defecto).
-- **La pantalla de login de Clerk sigue en INGLES** ("Sign in to NutriFlow", "Email address", "Continue"), lo cual viola la regla de UI en espanol de arriba. Es la unica pantalla de la app en ingles y es la primera que ve un usuario nuevo. Se arregla con el parametro `localizations` (`ClerkSdkLocalizationsCollection`) de `ClerkAuthConfig` en `lib/core/auth/clerk_bootstrap.dart`. Detectado el 2026-08-04, sin arreglar todavia.
+- **La pantalla de login de Clerk esta en espanol desde el 2026-08-05** (`lib/core/auth/clerk_localizations_es.dart`, cableado via `localizations`/`fallbackLocalization` en `clerk_bootstrap.dart`). Ya no queda ninguna pantalla de la app en ingles. Ojo si se actualiza `clerk_flutter`: la clase extiende la implementacion inglesa, asi que una version nueva que agregue cadenas compila igual pero las muestra en ingles - ver la entrada de bitacora del 2026-08-05 (Bloque A).
 
 ---
 
@@ -300,6 +300,24 @@ Seguido de Fase 3.5, se implemento el wizard de onboarding completo (~15 campos 
 ## 10. Bitacora viva
 
 > La mantengo yo (Claude), no Oscar. Entrada nueva (mas reciente arriba) cada vez que hay un cambio de alcance, una decision no trivial, un error de raiz, o una confirmacion de un enfoque no estandar. Esta seccion es la que leo primero para no repetir trabajo ni errores ya resueltos.
+
+### 2026-08-05 (Bloque A) - El cache local dejo de cruzar cuentas, y el login ya no esta en ingles
+
+Primer bloque de la tanda de cierre pedida por Oscar ("bloque por bloque, termina uno bien antes del siguiente"). Dos cosas, ambas sobre `main`, verificadas con `flutter analyze` (0 errores, los mismos 7 infos preexistentes), `flutter test` (**57/57**, eran 47) y `flutter build apk --debug` limpio.
+
+**1. El cache local ya no cruza cuentas, y el agujero era mas grande de lo que decia la nota original.** La entrada del 2026-08-01 describia solo la mitad en disco. Al leer el codigo aparecio una segunda mitad, en memoria: `goalProvider` y `todayMealEntriesProvider` **no son `autoDispose`**, asi que su valor sobrevivia al cierre de sesion y el siguiente usuario veia la meta y las comidas del anterior sin necesidad de estar sin conexion.
+
+Las dos mitades se cierran con un solo mecanismo, y esa es la parte que vale la pena recordar. `currentUserIdProvider` (`lib/core/auth/auth_providers.dart`) expone el id de usuario de Clerk **escuchando el `ChangeNotifier` de `ClerkAuthState`**, y `localCacheProvider` lo observa. De ahi salen los dos efectos a la vez: en disco, `ScopedLocalCache` prefija cada clave con `u:<userId>:`; en memoria, como todo el grafo (repositorios y `FutureProvider`s cacheados) cuelga de `localCacheProvider`, Riverpod invalida la cascada completa cuando cambia la cuenta. **Se descarto la alternativa obvia de invalidar a mano una lista de providers**: esa lista es exactamente lo que la siguiente feature olvida actualizar. Riverpod solo notifica si el id realmente cambio, asi que las notificaciones frecuentes del notifier (refresco de token) no cuestan nada.
+
+Detalles que costaron pensar y conviene no re-derivar:
+- **La purga de los datos del usuario anterior se hace en Dart, no con `LIKE 'prefijo%'`**: un id de Clerk (`user_2abc...`) trae un guion bajo, que en SQL `LIKE` es comodin de un caracter. La tabla tiene un punado de filas, asi que leer las claves y filtrar en Dart es gratis y obviamente correcto.
+- **Firmado sin sesion (`scope == null`) no lee ni escribe nada**, en vez de caer a claves sin dueno: datos sin atribuir son justo lo que la clase existe para evitar.
+- La purga corre **una vez por instancia**, y hay una instancia por cuenta, asi que cambiar de cuenta purga exactamente una vez (hay test que lo fija).
+- Se perdio, a proposito, la compatibilidad del cache viejo entre versiones que prometia un comentario de `MealLogsRepository`: las claves sin prefijo quedan inalcanzables y se purgan. Cuesta un fetch frio al actualizar. El comentario se corrigio en vez de dejarlo mintiendo.
+- `LocalCache` gano `clearExcept(prefix)` y el fake de tests se movio a `test/support/fake_local_cache.dart` (antes estaba duplicado dentro de `cached_fetch_test.dart`).
+- `clerkAuthProvider` se movio de `core/api/providers.dart` a `core/auth/auth_providers.dart` para no crear un ciclo `core/api <-> core/local_db`.
+
+**2. Login de Clerk en espanol.** `clerk_flutter` solo trae ingles (165 cadenas). `ClerkSdkLocalizationsEs` las traduce todas. Dos decisiones: **extiende `ClerkSdkLocalizationsEn` en vez de la clase abstracta**, para que una version futura del paquete que agregue cadenas siga compilando (el costo es que esas se verian en ingles, y por eso hay tests que fijan las cadenas visibles); y **se registra solo `es` con `fallbackLocalization` en espanol**, porque Clerk elige el idioma segun el locale del **dispositivo** (`View.of(context).platformDispatcher.locale`), no el de la app, asi que un telefono en ingles habria mostrado ingles dentro de una app que es espanol en todo lo demas.
 
 ### 2026-08-05 (cierre) - Tres sesiones trabajaron sobre la rama obsoleta `master` sin darse cuenta
 
@@ -441,7 +459,7 @@ Solucion: `lib/core/supabase/pg_timestamp.dart` con un unico helper `pgTimestamp
 - **`debugPrint` escribe tambien en release**, y `desktop_oauth_redirect.dart` registraba el query completo del callback, que lleva el token de handshake de Clerk. Ahora solo registra la ruta.
 - `formatFastingDuration` no acotaba duraciones negativas (`inMinutes.remainder(60)` conserva el signo, daba "-2h -30m"); `fastingProtocolLabel` se movio junto a `fastingProtocols` para poder testearlo.
 
-**PENDIENTE CONOCIDO, no arreglado aqui a proposito: el cache local no esta segmentado por usuario.** Las claves son constantes globales (`fasting_active`, `fasting_history`, `goal`, `today_meals`, `weight_logs_recent`) y nada limpia la base Drift al cerrar sesion. Si un segundo usuario inicia sesion en el mismo dispositivo y se queda sin conexion, el fallback de `cachedFetch` le entrega los datos del primero, incluyendo el campo libre `notes` de los ayunos. **Las RLS protegen la red, no el cache local.** Es un problema preexistente y sistemico (afecta igual a features ya mergeadas), y no se toco porque el arreglo correcto no es de una linea: `signedOutBuilder` es un builder de widget, asi que limpiar ahi dispararia en cada rebuild; hace falta un listener de transicion de sesion, o prefijar cada clave con el `app_user_id()` resuelto. Merece su propio cambio enfocado.
+**PENDIENTE CONOCIDO en su momento, RESUELTO el 2026-08-05 (ver la entrada "Bloque A" de ese dia): el cache local no estaba segmentado por usuario.** Las claves son constantes globales (`fasting_active`, `fasting_history`, `goal`, `today_meals`, `weight_logs_recent`) y nada limpia la base Drift al cerrar sesion. Si un segundo usuario inicia sesion en el mismo dispositivo y se queda sin conexion, el fallback de `cachedFetch` le entrega los datos del primero, incluyendo el campo libre `notes` de los ayunos. **Las RLS protegen la red, no el cache local.** Es un problema preexistente y sistemico (afecta igual a features ya mergeadas), y no se toco porque el arreglo correcto no es de una linea: `signedOutBuilder` es un builder de widget, asi que limpiar ahi dispararia en cada rebuild; hace falta un listener de transicion de sesion, o prefijar cada clave con el `app_user_id()` resuelto. Merece su propio cambio enfocado.
 
 ### 2026-07-31 (noche) - Primer APK release instalado en el Galaxy A55
 
