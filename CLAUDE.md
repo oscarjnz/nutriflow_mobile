@@ -322,7 +322,9 @@ Oscar pidio que la "tarjeta de Clerk arriba a la derecha" dejara de verse asi, p
 
 Ambas acciones piden confirmacion antes de cerrar sesion: en el dashboard el avatar queda a un toque del boton de registrar, y perder una sesion por un toque de mas obliga a repetir todo el login OAuth.
 
-`flutter analyze` 0 errores, `flutter test` **63/63**. **Sin verificacion visual todavia:** el build de Windows fallo con `MSB3027` porque una instancia de la app que Oscar tenia abierta bloqueaba `WebView2Loader.dll`, y no se cerro un proceso suyo por cuenta propia. Cerrar la app y relanzar es todo lo que hace falta.
+`flutter analyze` 0 errores, `flutter test` **63/63**, y **verificado en vivo en Windows**: avatar en el encabezado, el sheet con identidad + "Ver perfil" + "Cerrar sesion" en rojo, y el tile nuevo en el perfil. Lo unico sin ejecutar es el cierre de sesion en si, que habria obligado a repetir el login OAuth. La misma corrida confirmo el arreglo del Bloque C: el dashboard mostro 957/1978 kcal y la comida del dia.
+
+**Truco util para verificar UI de escritorio desde aqui** (no hay forma de manejar una ventana de Windows con las herramientas normales): PowerShell con `Add-Type` sobre `user32.dll` da `GetWindowRect` + `SetCursorPos` + `mouse_event` para clicar, y `System.Drawing.Graphics.CopyFromScreen` para capturar la ventana a PNG, que si se puede leer. Dos avisos: `ShowWindow(h, 9)` restaura la ventana, asi que su tamano puede cambiar entre capturas y las coordenadas hay que recalcularlas mirando la captura anterior; y las coordenadas de pantalla pueden ser **negativas** con varios monitores (aqui salieron `1332,-886`), lo cual es correcto y no un error. **Ademas, si `flutter run` falla con `MSB3027`/`MSB3021` sobre `WebView2Loader.dll`, es una instancia de la app todavia abierta bloqueando el archivo; no matar un proceso que abrio Oscar, pedirle que la cierre.**
 
 ### 2026-08-05 (Bloque C) - "No registra las comidas" era "no las lee": el claim `role` que no viaja a produccion
 
