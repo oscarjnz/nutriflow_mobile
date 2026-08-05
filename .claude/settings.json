@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "statusMessage": "Verificando la rama git...",
+            "timeout": 15,
+            "command": "b=$(git branch --show-current 2>/dev/null); [ -n \"$b\" ] || b=desconocida; if [ \"$b\" = \"main\" ]; then printf '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Rama git verificada: main. Correcta.\"}}'; else printf '{\"systemMessage\":\"ATENCION: la rama git es %s, no main. Cambiala con: git switch main\",\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"ALERTA DE RAMA: el checkout esta en %s, no en main. main es la unica rama viva de este repo; master es obsoleta y sin ancestro comun con main, asi que git no avisa del desfase y todo compila igual. NO trabajar en esta rama: correr git switch main antes de cualquier tarea. Ver CLAUDE.md seccion 0.\"}}' \"$b\" \"$b\"; fi"
+          }
+        ]
+      }
+    ]
+  }
+}

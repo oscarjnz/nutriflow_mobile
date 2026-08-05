@@ -1,0 +1,25 @@
+name: Supabase keep-alive
+
+on:
+  schedule:
+    # Cada 3 dias, bien dentro de la ventana de ~7 dias de inactividad
+    # que usa Supabase para pausar proyectos gratuitos.
+    - cron: "0 8 */3 * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping del proyecto de Supabase
+        env:
+          SUPABASE_URL: https://drvijhxhthadzitvnitz.supabase.co
+          # Anon key: no es secreta, la app movil ya la embebe en el binario.
+          # El acceso real a datos lo bloquea RLS, no esta key.
+          SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRydmlqaHhodGhhZHppdHZuaXR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMzc4MTIsImV4cCI6MjA5NjkxMzgxMn0.imNkpg6ORodQx7gss2OUYFl81Sa7nxxJqe_jEVAjVcw
+        run: |
+          curl --fail --silent --show-error \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/rest/v1/" > /dev/null
+          echo "Ping enviado a $SUPABASE_URL"
