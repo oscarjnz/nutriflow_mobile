@@ -56,6 +56,12 @@ Detras: Clerk en **produccion** con dominio propio (`nutriflow.dpdns.org`), Supa
 
 **Ultimo hito verificado (2026-08-05):** **Clerk esta en PRODUCCION con dominio propio (`nutriflow.dpdns.org`) y el login funciona end-to-end en Windows**, con la app completa detras (onboarding con cuenta nueva + dashboard, todos los endpoints devolviendo 200). Ojo con dos cosas al retomar: eso se verifico sobre `master`, o sea sobre el fix de deep link viejo, **no sobre el loopback RFC 8252 que usa `main`** (ver el aviso de la entrada del 2026-08-02 sobre la whitelist de redirect URLs de la instancia de produccion); y **en el Galaxy A55 el login de produccion no se ha vuelto a probar** desde la migracion. Detalle completo en las entradas de bitacora del 2026-08-02 y 2026-08-05.
 
+**LO PRIMERO DE LA PROXIMA SESION, en orden (definido al cierre del 2026-08-05):**
+1. **Rotar la `CLERK_SECRET_KEY` de produccion.** Expuesta en el chat dos veces (08-02 y 08-05), sin rotar. Da control total sobre los usuarios de produccion. Clerk Dashboard > API Keys, y actualizarla en Vercel y en `nutriflow/.env.local`.
+2. **Confirmar el login de Windows** con `flutter run -d windows --dart-define-from-file=env.json`, buscando en el log la linea `callback carried no nf parameter` (ver la entrada de bitacora "Bloque B" de ese dia).
+3. **Firmar el release:** la keystore ya existe en `C:\Users\oscar\nutriflow-release.jks` (alias `nutriflow`). Falta `android/key.properties` (ya gitignored) y los `signingConfigs` en `android/app/build.gradle.kts`, que hoy sigue firmando con debug keys. Nunca pedir la contrasena por chat.
+4. **Sacar el APK release y publicarlo** en GitHub Releases con tag nuevo (el `versionCode` solo sube).
+
 **Siguiente accion concreta (decidir con Oscar):** (0) **verificar que el login de Windows sigue funcionando ahora que el checkout esta en `main`** - es lo unico que cambio de mecanismo (loopback en vez de `com.clerk.flutter://`) y es lo que puede romperse contra la instancia de produccion de Clerk; (a) **QA manual del feature de weight logs + cache offline en el Galaxy A55** (guardar peso, ver historial, apagar red y confirmar que el dashboard y la pantalla de peso siguen mostrando datos con el banner de "sin conexion"), primera vez que haya un dispositivo fisico disponible; (b) revisar y commitear en `nutriflow` los endpoints REST que ahi siguen sin commitear (`goals`, `logging/log-meal`, `foods/barcode-lookup`, `foods/selectable`, `onboarding/status`) + los demas archivos pendientes de sesiones previas; (c) **probar el wizard de onboarding de punta a punta con una cuenta nueva** (todavia no se hizo, solo se verifico que no rompe cuentas ya onboardeadas); (d) seguir con el resto de Fase 3 (edicion de foods, favorites/recipes) - weight logs, el cache local y el fasting timer ya estan hechos.
 
 **Ultimo hito verificado (2026-08-01):** revision final del branch hecha (dos revisores en paralelo), **con un hallazgo critico real: todas las marcas de tiempo se escribian como hora local sin offset en columnas `timestamptz`**, lo que hacia que un ayuno recien iniciado marcara "4h 0m" y que las comidas de la noche cayeran en el dia equivocado. Corregido con el helper `pgTimestamp` + `.toLocal()` en las lecturas; ver la entrada de bitacora del 2026-08-01 (cierre). `flutter analyze` 0 errores, `flutter test` 43/43.
@@ -300,6 +306,24 @@ Seguido de Fase 3.5, se implemento el wizard de onboarding completo (~15 campos 
 ## 10. Bitacora viva
 
 > La mantengo yo (Claude), no Oscar. Entrada nueva (mas reciente arriba) cada vez que hay un cambio de alcance, una decision no trivial, un error de raiz, o una confirmacion de un enfoque no estandar. Esta seccion es la que leo primero para no repetir trabajo ni errores ya resueltos.
+
+### 2026-08-05 (Bloque B) - El login de escritorio no estaba "sin autorizar": era imposible de autorizar
+
+Al pasar la app al backend HTTPS de produccion quedaba una advertencia anotada: el flujo loopback RFC 8252 de `main` nunca se habia probado contra la instancia de **produccion** de Clerk. Oscar reclamo, con razon, por que se dejo como advertencia en vez de resolverse. Al sondearlo resulto estar **roto**, y por un motivo estructural.
+
+**La regla, verificada empiricamente contra la instancia viva (no leida en la doc): Clerk compara la redirect URL autorizada de forma exacta en esquema, host, puerto y path, e ignora por completo el query string.** `com.clerk.flutter://callback` pasa; `com.clerk.flutter://callback/algo` no; `com.clerk.flutter://callback/` tampoco (la barra final cuenta); `...callback?nf=SECRETO` si pasa. El error es `resource_missmatch`.
+
+**Por que eso rompia el diseno anterior:** `DesktopOAuthRedirect` bindeaba un **puerto efimero** (`HttpServer.bind(..., 0)`) y metia un **segmento aleatorio en el path** como secreto anti-CSRF. O sea, una URL distinta en cada arranque. **No es que faltara agregarla a la whitelist: no habia ninguna URL fija que agregar.** El propio comentario del codigo decia que Clerk "no exige registrar el puerto en una instancia de **desarrollo**" - cierto, y justamente por eso el fallo aparece recien en produccion, que si valida.
+
+**El arreglo (commit `5351891`):** puerto fijo 49731 con alternos 49732/49733 (los tres registrados en la instancia, asi que un puerto ocupado es una molestia y no una falla), path fijo `/clerk-callback`, y el secreto movido al query `?nf=`, donde el match lo ignora.
+
+**Lo que no se pudo verificar y como se cubrio:** si Clerk **devuelve** un query param desconocido en el callback de vuelta. No se puede comprobar sin completar el flujo con un navegador. Por eso el secreto ya no carga solo con la defensa: el callback exige ademas caer dentro de una **ventana de intento** que abre `beginAttempt()` (llamado desde `redirectionGenerator`, o sea justo cuando el usuario toca el boton) y cierra el primer callback valido. Un secreto **incorrecto** se rechaza siempre; uno **ausente** se registra en el log, para que el comportamiento del round trip pase de suposicion a hecho observado la primera vez que alguien inicie sesion. **Al cerrar la sesion eso seguia sin confirmarse: buscar `callback carried no nf parameter` en el log del primer login de Windows.**
+
+**Metodo reutilizable (esta en la memoria como `reference-clerk-redirect-url-matching`):** se puede sondear si una URL esta autorizada **sin la secret key**, creando un client nativo en la FAPI (`POST /v1/client?_is_native=1`, el token viene en el header `Authorization`) y lanzando un `POST /v1/client/sign_ins` con la URL candidata. Incluir siempre un control negativo, para probar que el filtro esta activo y no aceptando todo.
+
+**Trampa de PowerShell:** `curl.exe -d "{\"url\":\"...\"}"` falla con `request_body_invalid` por el escapado de comillas. Usar `Invoke-RestMethod` con `ConvertTo-Json`, o bash.
+
+**Nota de seguridad, segunda vez: Oscar volvio a pegar la `CLERK_SECRET_KEY` de produccion completa en el chat, y sigue sin rotarse desde el 2026-08-02.** Se uso una vez mas (ya estaba expuesta, rotar despues no cambiaba nada) y se le insistio en rotarla. Es lo primero de la proxima sesion.
 
 ### 2026-08-05 (Bloque A) - El cache local dejo de cruzar cuentas, y el login ya no esta en ingles
 
