@@ -56,13 +56,13 @@ Detras: Clerk en **produccion** con dominio propio (`nutriflow.dpdns.org`), Supa
 
 **Ultimo hito verificado (2026-08-05):** **Clerk esta en PRODUCCION con dominio propio (`nutriflow.dpdns.org`) y el login funciona end-to-end en Windows**, con la app completa detras (onboarding con cuenta nueva + dashboard, todos los endpoints devolviendo 200). Ojo con dos cosas al retomar: eso se verifico sobre `master`, o sea sobre el fix de deep link viejo, **no sobre el loopback RFC 8252 que usa `main`** (ver el aviso de la entrada del 2026-08-02 sobre la whitelist de redirect URLs de la instancia de produccion); y **en el Galaxy A55 el login de produccion no se ha vuelto a probar** desde la migracion. Detalle completo en las entradas de bitacora del 2026-08-02 y 2026-08-05.
 
-**EL APK YA SALE FIRMADO DE VERDAD (2026-08-05). Falta subirlo.**
+**EL APK YA ESTA PUBLICADO (2026-08-05): https://github.com/oscarjnz/nutriflow_mobile/releases/tag/v0.1.1**
 
 `android/key.properties` ya existe (gitignored por `android/.gitignore:12`, igual que `*.jks`), la keystore esta en `C:\Users\oscar\nutriflow-release.jks` con alias `nutriflow`, y `flutter build apk --release --dart-define-from-file=env.json` produce `build\app\outputs\flutter-apk\app-release.apk` (80.1 MB) firmado con el certificado de Oscar. Verificado, no supuesto: SHA-256 `d05e43d8…4ab6` identica a la de la keystore, `CN=Oscar Jimenez` en vez de `CN=Android Debug`, validez hasta 2053 (Play exige al menos 2033), esquema v2 RSA 2048.
 
 **Como verificar una firma, porque `keytool` NO sirve para esto:** `keytool -printcert -jarfile app-release.apk` responde "Not a signed jar file" y **eso no es un fallo**, solo entiende firmas v1 (JAR) y los APK modernos usan unicamente v2/v3. La herramienta correcta es `apksigner verify --print-certs -v <apk>`, que vive en `~/AppData/Local/Android/Sdk/build-tools/36.1.0/`. Para las fechas de validez hay un paso mas: `apksigner verify --print-certs-pem` y pasarle ese PEM a `keytool -printcert -file`.
 
-1. **Siguiente paso: subir el APK a GitHub Releases** con tag nuevo (el `versionCode` solo sube, nunca se repite). Hoy la version es `0.1.0+1`.
+1. **HECHO: el APK esta en GitHub Releases** como `v0.1.1` (asset `nutriflow-0.1.1.apk`, 80.1 MB). El tag `v0.1.0` no se reutilizo porque apunta a `eddf3b8`, la publicacion de solo codigo del 2026-08-01, que no es el codigo del APK. **El `versionCode` solo sube, nunca se repite**: 1 fue `v0.1.0`, 2 fue `v0.1.1`, 3 es el nombre + icono propios (sin publicar aun al escribir esto).
 2. **Para Google Play hace falta `.aab`, no `.apk`** (`flutter build appbundle --release --dart-define-from-file=env.json`, misma firma y misma configuracion): Play exige App Bundle para apps nuevas desde agosto de 2021. Conviene aceptar Play App Signing, que deja el `.jks` como simple upload key y permite resetearla si se pierde.
 3. **Respaldar el `.jks` y sus contrasenas fuera de esta maquina.** Es el unico archivo del proyecto que no se puede regenerar: si se pierde antes de activar Play App Signing, la app solo se puede volver a publicar con otro `applicationId`, o sea como una app distinta.
 4. **Sigue pendiente aparte: rotar la `CLERK_SECRET_KEY` de produccion.** Expuesta en el chat dos veces (08-02 y 08-05), sin rotar. Da control total sobre los usuarios de produccion. Clerk Dashboard > API Keys, y actualizarla en Vercel y en `nutriflow/.env.local`. Es la deuda de seguridad mas vieja abierta.
@@ -321,6 +321,20 @@ Seguido de Fase 3.5, se implemento el wizard de onboarding completo (~15 campos 
 ## 10. Bitacora viva
 
 > La mantengo yo (Claude), no Oscar. Entrada nueva (mas reciente arriba) cada vez que hay un cambio de alcance, una decision no trivial, un error de raiz, o una confirmacion de un enfoque no estandar. Esta seccion es la que leo primero para no repetir trabajo ni errores ya resueltos.
+
+### 2026-08-05 (release) - APK publicado, identidad propia, y por que Play Protect no se arregla por codigo
+
+**Release `v0.1.1` publicado**: https://github.com/oscarjnz/nutriflow_mobile/releases/tag/v0.1.1, con `nutriflow-0.1.1.apk` (80.1 MB) firmado con la llave real (`CN=Oscar Jimenez`, SHA-256 `d05e43d8…4ab6`, v2 RSA 2048, verificado con `apksigner`, no supuesto). Antes se pushearon los 8 commits que llevaban sin subir.
+
+**Por que `v0.1.1` y no `v0.1.0`:** el tag `v0.1.0` ya existia y apunta a `eddf3b8`, la publicacion de solo codigo del 2026-08-01. Reetiquetarlo habria hecho que el release mintiera sobre que contiene. Regla que queda: **el tag de un release con binario tiene que apuntar al commit desde el que se compilo ese binario**, y el `versionCode` solo sube.
+
+**Play Protect: "Play Protect no vio una app de este desarrollador antes" NO tiene arreglo por codigo, y conviene no perder tiempo buscandolo.** Ese aviso es reputacion **del certificado de firma**, no un juicio sobre el contenido del APK ni una mala configuracion. No hay flag de manifest, opcion de firma ni parametro de build que lo evite. Las unicas salidas reales son (a) publicar en Google Play, donde la app pasa revision y se firma con Play App Signing, o (b) que quien instale toque "Mas detalles" -> "Instalar de todos modos". Para Play: 25 USD una vez, `.aab` en vez de `.apk`, y para cuentas personales creadas despues de 2023-11-13 (la de Oscar) un test cerrado de 12 testers durante 14 dias.
+
+**Identidad propia, porque la app se seguia presentando como el proyecto de Flutter:**
+- **Nombre `NutriFlow`** (decidido con Oscar; se descarto `Nutriflow` con f minuscula para no tener dos grafias en el proyecto). Estaba en cuatro sitios distintos, no uno: `android:label` del `AndroidManifest.xml`, `CFBundleDisplayName` y `CFBundleName` del `Info.plist` de iOS, el titulo de ventana de `windows/runner/main.cpp`, y `FileDescription`/`ProductName` de `windows/runner/Runner.rc`. Se dejaron sin tocar a proposito `BINARY_NAME` de `windows/CMakeLists.txt` y `InternalName`/`OriginalFilename` del `.rc`: son el nombre del ejecutable, no lo que ve el usuario.
+- **Icono propio**: monograma "N" en Plus Jakarta Sans, verde `--primary` sobre el `--background` crema, generado por `tool/generate_app_icon.py` (PIL). El script **deriva ambos colores de los tokens HSL de la seccion 5** en vez de hardcodear hex, y centra la N por sus **limites de tinta reales** (`getbbox`) y no por las metricas de la fuente, que la dejarian visiblemente descentrada. `flutter_launcher_icons` reparte los tres maestros de `assets/icon/` a todas las densidades de Android, el appiconset de iOS y el `.ico` de Windows.
+
+**Trampa real que costo una pasada y aplica a cualquier icono adaptativo:** yo habia encogido la N al 66% en el maestro del foreground para respetar la zona segura del icono adaptativo, **y `flutter_launcher_icons` aplica ademas su propio `android:inset="16%"`** en el `mipmap-anydpi-v26/ic_launcher.xml` que genera. Las dos cosas se multiplican y la N quedaba muy pequena dentro de la mascara. La correccion es no insetear a mano: el maestro del foreground lleva el glifo al mismo tamano que el full-bleed. Verificado simulando la composicion real (fondo plano + inset del 16% + recorte al 72/108 visible + mascara): la N ocupa 53% del area visible.
 
 ### 2026-08-05 (cierre) - Los tres defectos del QA, corregidos y verificados en el telefono
 

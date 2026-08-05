@@ -7,7 +7,7 @@
          Supabase, Clerk and the nutriflow REST API over the network. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="nutriflow_mobile"
+        android:label="NutriFlow"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <!-- No networkSecurityConfig: every backend this app talks to
