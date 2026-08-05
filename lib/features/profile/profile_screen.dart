@@ -66,6 +66,16 @@ class ProfileScreen extends ConsumerWidget {
               onTap: () => context.push('/weight'),
             ),
             const SizedBox(height: 10),
+            // Fasting used to be reachable only from an icon inside the
+            // weight screen, which is nowhere a user would think to look for
+            // it. It belongs with the other tracking entry points.
+            _ActionTile(
+              icon: LucideIcons.timer,
+              title: 'Ayuno',
+              subtitle: 'Inicia un ayuno y sigue tu progreso',
+              onTap: () => context.push('/fasting'),
+            ),
+            const SizedBox(height: 10),
             _ActionTile(
               icon: LucideIcons.calendarDays,
               title: 'Historial por dia',

@@ -121,20 +121,20 @@ class _LoggingScreenState extends ConsumerState<LoggingScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
           children: [
-            Row(
+            // Wrap, not a Row of Expanded: four equal shares of a phone's
+            // width cut "Desayuno" to "Desayun" and "Almuerzo" to "Almue".
+            // Chips size to their own label here and drop to a second line
+            // when they need one.
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                for (final mealType in kMealTypes) ...[
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(labelForMealType(mealType)),
-                        selected: _mealType == mealType,
-                        onSelected: (_) => setState(() => _mealType = mealType),
-                      ),
-                    ),
+                for (final mealType in kMealTypes)
+                  ChoiceChip(
+                    label: Text(labelForMealType(mealType)),
+                    selected: _mealType == mealType,
+                    onSelected: (_) => setState(() => _mealType = mealType),
                   ),
-                ],
               ],
             ),
             const SizedBox(height: 16),

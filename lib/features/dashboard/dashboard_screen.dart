@@ -195,8 +195,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 // while /log is on top (invalidating onboardingStatusProvider
                 // swaps this whole subtree out).
                 if (!mounted) return;
-                ref.invalidate(todayMealEntriesProvider);
-                ref.invalidate(mealEntriesForDayProvider(_selectedDate));
+                // Deferred a frame on purpose. `await push` resumes while the
+                // pop transition is still rebuilding, and invalidating here
+                // leaves the provider dirty exactly when the transition's
+                // TickerMode change makes flutter_riverpod flush it mid-build
+                // - which ends in an illegal setState on the provider scope.
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) return;
+                  ref.invalidate(todayMealEntriesProvider);
+                  ref.invalidate(mealEntriesForDayProvider(_selectedDate));
+                });
               },
             ),
           ],
